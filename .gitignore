@@ -1,0 +1,56 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Deno
+.deno/
+deno.lock
+*.tmp
+
+# Dependencies
+node_modules/
+.cache/
+
+# Database
+*.db
+*.sql.bak
+postgres_data/
+
+# Build outputs
+dist/
+build/
+*.o
+*.so
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Kubernetes
+kubeconfig.yaml
+*.kubeconfig
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# IDE workspace
+.workspace.code-workspace

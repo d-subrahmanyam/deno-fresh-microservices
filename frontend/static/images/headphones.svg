@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#dbeafe"/>
+      <stop offset="100%" stop-color="#93c5fd"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#g)"/>
+  <path d="M240 340v-70c0-88 72-160 160-160s160 72 160 160v70" fill="none" stroke="#1e3a8a" stroke-width="30"/>
+  <rect x="200" y="300" width="70" height="140" rx="25" fill="#1e40af"/>
+  <rect x="530" y="300" width="70" height="140" rx="25" fill="#1e40af"/>
+  <text x="400" y="540" text-anchor="middle" font-size="42" font-family="Arial" fill="#1e3a8a">Wireless Headphones</text>
+</svg>

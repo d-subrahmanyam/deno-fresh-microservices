@@ -1,0 +1,14 @@
+<svg width="800" height="600" viewBox="0 0 800 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="800" height="600" rx="32" fill="url(#bg)"/>
+  <rect x="160" y="250" width="480" height="110" rx="55" fill="#0F766E"/>
+  <rect x="190" y="275" width="420" height="60" rx="30" fill="#14B8A6"/>
+  <rect x="610" y="290" width="70" height="30" rx="15" fill="#115E59"/>
+  <circle cx="205" cy="305" r="18" fill="#CCFBF1"/>
+  <text x="400" y="500" text-anchor="middle" fill="#134E4A" font-size="42" font-family="Arial, sans-serif" font-weight="700">Yoga Mat</text>
+  <defs>
+    <linearGradient id="bg" x1="80" y1="60" x2="720" y2="540" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#CCFBF1"/>
+      <stop offset="1" stop-color="#99F6E4"/>
+    </linearGradient>
+  </defs>
+</svg>

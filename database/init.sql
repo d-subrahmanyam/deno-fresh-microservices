@@ -1,0 +1,77 @@
+-- Initialize databases and create tables with sample data
+
+-- Users database
+SELECT 'CREATE DATABASE users'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'users')\gexec
+\connect users;
+
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP NOT NULL,
+  updated_at TIMESTAMP NOT NULL
+);
+
+-- Insert sample users
+INSERT INTO users (id, email, name, created_at, updated_at) VALUES
+  ('550e8400-e29b-41d4-a716-446655440000', 'john@example.com', 'John Doe', NOW(), NOW()),
+  ('550e8400-e29b-41d4-a716-446655440001', 'jane@example.com', 'Jane Smith', NOW(), NOW()),
+  ('550e8400-e29b-41d4-a716-446655440002', 'bob@example.com', 'Bob Johnson', NOW(), NOW())
+ON CONFLICT DO NOTHING;
+
+-- Products database
+SELECT 'CREATE DATABASE products'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'products')\gexec
+\connect products;
+
+CREATE TABLE IF NOT EXISTS products (
+  id UUID PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  price DECIMAL(10, 2) NOT NULL,
+  image TEXT,
+  category VARCHAR(100) NOT NULL,
+  stock INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL,
+  updated_at TIMESTAMP NOT NULL
+);
+
+-- Insert sample products
+INSERT INTO products (id, name, description, price, image, category, stock, created_at, updated_at) VALUES
+  ('650e8400-e29b-41d4-a716-446655440000', 'Wireless Headphones', 'Premium wireless headphones with noise cancellation', 79.99, 'headphones.jpg', 'Electronics', 15, NOW(), NOW()),
+  ('650e8400-e29b-41d4-a716-446655440001', 'USB-C Cable', 'High-speed USB-C charging and data cable', 12.99, 'usb-cable.jpg', 'Electronics', 50, NOW(), NOW()),
+  ('650e8400-e29b-41d4-a716-446655440002', 'Coffee Maker', 'Smart coffee maker with app control', 49.99, 'coffee-maker.jpg', 'Home', 10, NOW(), NOW()),
+  ('650e8400-e29b-41d4-a716-446655440003', 'Running Shoes', 'Professional running shoes for marathons', 89.99, 'running-shoes.jpg', 'Clothing', 20, NOW(), NOW()),
+  ('650e8400-e29b-41d4-a716-446655440004', 'Stainless Steel Water Bottle', 'Durable water bottle keeps drinks cold for 24 hours', 29.99, 'water-bottle.jpg', 'Home', 30, NOW(), NOW()),
+  ('650e8400-e29b-41d4-a716-446655440005', 'Yoga Mat', 'Non-slip yoga mat with carrying strap', 34.99, 'yoga-mat.jpg', 'Fitness', 25, NOW(), NOW()),
+  ('650e8400-e29b-41d4-a716-446655440006', 'Laptop Stand', 'Adjustable laptop stand for better ergonomics', 44.99, 'laptop-stand.jpg', 'Electronics', 18, NOW(), NOW()),
+  ('650e8400-e29b-41d4-a716-446655440007', 'Wireless Mouse', 'Lightweight wireless mouse with long battery life', 24.99, 'wireless-mouse.jpg', 'Electronics', 40, NOW(), NOW()),
+  ('650e8400-e29b-41d4-a716-446655440008', 'Blue Light Glasses', 'Anti-blue light glasses for screen time', 39.99, 'glasses.jpg', 'Clothing', 22, NOW(), NOW()),
+  ('650e8400-e29b-41d4-a716-446655440009', 'Desk Lamp', 'LED desk lamp with USB charging port', 54.99, 'desk-lamp.jpg', 'Home', 12, NOW(), NOW())
+ON CONFLICT DO NOTHING;
+
+-- Orders database
+SELECT 'CREATE DATABASE orders'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'orders')\gexec
+\connect orders;
+
+CREATE TABLE IF NOT EXISTS orders (
+  id UUID PRIMARY KEY,
+  user_id VARCHAR(255) NOT NULL,
+  items JSONB NOT NULL,
+  total DECIMAL(10, 2) NOT NULL,
+  status VARCHAR(50) NOT NULL DEFAULT 'pending',
+  created_at TIMESTAMP NOT NULL,
+  updated_at TIMESTAMP NOT NULL
+);
+
+-- Insert sample orders
+INSERT INTO orders (id, user_id, items, total, status, created_at, updated_at) VALUES
+  ('750e8400-e29b-41d4-a716-446655440000', '550e8400-e29b-41d4-a716-446655440000', 
+   '[{"productId":"650e8400-e29b-41d4-a716-446655440000","quantity":1,"price":79.99}]', 
+   79.99, 'confirmed', NOW() - INTERVAL '2 days', NOW() - INTERVAL '1 day'),
+  ('750e8400-e29b-41d4-a716-446655440001', '550e8400-e29b-41d4-a716-446655440001', 
+   '[{"productId":"650e8400-e29b-41d4-a716-446655440001","quantity":2,"price":12.99},{"productId":"650e8400-e29b-41d4-a716-446655440002","quantity":1,"price":49.99}]', 
+   75.97, 'pending', NOW(), NOW())
+ON CONFLICT DO NOTHING;

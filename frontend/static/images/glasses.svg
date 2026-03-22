@@ -1,0 +1,15 @@
+<svg width="800" height="600" viewBox="0 0 800 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="800" height="600" rx="32" fill="url(#bg)"/>
+  <circle cx="280" cy="280" r="110" stroke="#0F172A" stroke-width="24"/>
+  <circle cx="520" cy="280" r="110" stroke="#0F172A" stroke-width="24"/>
+  <path d="M390 280H410" stroke="#0F172A" stroke-width="18" stroke-linecap="round"/>
+  <path d="M168 258L108 230" stroke="#0F172A" stroke-width="18" stroke-linecap="round"/>
+  <path d="M632 258L692 230" stroke="#0F172A" stroke-width="18" stroke-linecap="round"/>
+  <text x="400" y="500" text-anchor="middle" fill="#1F2937" font-size="42" font-family="Arial, sans-serif" font-weight="700">Blue Light Glasses</text>
+  <defs>
+    <linearGradient id="bg" x1="80" y1="60" x2="720" y2="540" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F5D0FE"/>
+      <stop offset="1" stop-color="#DDD6FE"/>
+    </linearGradient>
+  </defs>
+</svg>

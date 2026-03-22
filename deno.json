@@ -1,0 +1,21 @@
+{
+  "tasks": {
+    "start": "docker-compose up --build",
+    "stop": "docker-compose down",
+    "logs:gateway": "docker-compose logs -f api-gateway",
+    "logs:products": "docker-compose logs -f products-service",
+    "logs:orders": "docker-compose logs -f orders-service",
+    "logs:cart": "docker-compose logs -f cart-service",
+    "logs:frontend": "docker-compose logs -f frontend",
+    "k8s:deploy": "kubectl apply -f kubernetes/",
+    "k8s:delete": "kubectl delete -f kubernetes/",
+    "k8s:status": "kubectl get all -n microservices"
+  },
+  "imports": {
+    "$std/": "https://deno.land/std@0.208.0/",
+    "$fresh/": "https://deno.land/x/fresh@1.6.0/",
+    "oak": "https://deno.land/x/oak@v12.6.1/mod.ts",
+    "postgres": "https://deno.land/x/postgres@v0.17.0/mod.ts",
+    "redis": "https://deno.land/x/redis@v0.32.3/mod.ts"
+  }
+}

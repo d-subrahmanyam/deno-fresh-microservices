@@ -1,0 +1,14 @@
+<svg width="800" height="600" viewBox="0 0 800 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="800" height="600" rx="32" fill="url(#bg)"/>
+  <path d="M310 170C310 120.294 350.294 80 400 80C449.706 80 490 120.294 490 170V250H310V170Z" fill="#475569"/>
+  <path d="M280 250H520V350C520 438.366 468.366 500 400 500C331.634 500 280 438.366 280 350V250Z" fill="#F8FAFC"/>
+  <rect x="386" y="115" width="28" height="105" rx="14" fill="#94A3B8"/>
+  <path d="M280 330C340 300 460 300 520 330" stroke="#CBD5E1" stroke-width="12" stroke-linecap="round"/>
+  <text x="400" y="550" text-anchor="middle" fill="#1E293B" font-size="42" font-family="Arial, sans-serif" font-weight="700">Wireless Mouse</text>
+  <defs>
+    <linearGradient id="bg" x1="80" y1="60" x2="720" y2="540" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#DBEAFE"/>
+      <stop offset="1" stop-color="#E0F2FE"/>
+    </linearGradient>
+  </defs>
+</svg>
