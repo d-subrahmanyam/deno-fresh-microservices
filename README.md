@@ -78,7 +78,21 @@ That's it! The application initializes with sample data automatically.
          (Shared Data Storage)
 ```
 
-## 📚 Service Documentation
+## � Screenshots
+
+| Homepage | Products |
+|----------|----------|
+| ![Homepage](screenshots/homepage.png) | ![Products](screenshots/products.png) |
+
+| Shopping Cart | Checkout |
+|---------------|----------|
+| ![Cart](screenshots/cart.png) | ![Checkout](screenshots/checkout.png) |
+
+| Order Confirmation |
+|--------------------|
+| ![Order Confirmation](screenshots/order-confirmation.png) |
+
+## �📚 Service Documentation
 
 | Service | Port | Purpose | Documentation |
 |---------|------|---------|---------------|
