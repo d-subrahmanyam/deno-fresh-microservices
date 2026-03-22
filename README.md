@@ -352,6 +352,22 @@ REDIS_URL=redis://localhost:6379
 2. **Authentication** - Demo users only, no user registration flow yet
 3. **Inventory Management** - Stock quantities not decremented on purchase (planned for future release)
 
+## 🚀 Future Enhancements
+
+- Add user registration, password reset, and profile management flows
+- Implement product reviews and ratings with average score aggregation
+- Introduce wishlist support with add-to-cart shortcuts
+- Improve order item enrichment to persist product names/images at order time
+- Add inventory reservation and stock decrement on confirmed checkout
+- Add structured logging across all services with a shared log schema
+- Add Prometheus metrics and alerting for latency, error rates, and resource usage
+- Add horizontal autoscaling policies for Kubernetes deployments
+- Evaluate service discovery evolution: stay with Kubernetes-native discovery or add Consul when scale justifies it
+- Evolve toward a headless API architecture so the same backend can power both Web and Mobile clients with shared business capabilities
+- Introduce an API experience layer (BFF or API gateway composition) for channel-specific payloads and versioning across Web and Mobile apps
+- Add GraphQL support alongside REST (initially as a hybrid model) to enable flexible client-driven queries and reduce over-fetching
+- Expand automated test coverage with contract, integration, and end-to-end suites
+
 ## 📦 Technologies Used
 
 ### Core Framework & Runtime
@@ -380,12 +396,21 @@ This project is open source and available under the MIT License.
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please follow these guidelines:
-1. Create a feature branch from `main`
-2. Make focused, atomic commits
-3. Include unit tests for new features
-4. Verify all services pass health checks
-5. Submit a pull request with description
+Contributions are welcome. Use this workflow for consistent, reviewable changes:
+
+1. Fork the repository and create a branch from `main` using a descriptive name (example: `feat/order-retries`)
+2. Keep changes focused and atomic; avoid unrelated refactors in the same pull request
+3. Run and verify local checks before opening a PR:
+  - Start services: `docker-compose up --build`
+  - Verify health endpoints for gateway and core services
+  - Validate key user flow: login -> add to cart -> checkout -> order confirmation
+4. Add or update tests for behavioral changes (unit/integration/e2e where applicable)
+5. Update documentation when APIs, architecture, or setup steps change
+6. Open a pull request with:
+  - Summary of what changed and why
+  - Screenshots/GIFs for UI updates
+  - Notes about backward compatibility or migration steps
+7. Address review feedback with incremental commits until approval
 
 ## 📞 Support & Questions
 
@@ -689,9 +714,9 @@ docker stats
 
 MIT - Open source and free to use
 
-## Contributing
+## Community
 
-Feel free to submit issues and enhancement requests!
+Feel free to submit issues, enhancement requests, and pull requests.
 
 ## Support
 
