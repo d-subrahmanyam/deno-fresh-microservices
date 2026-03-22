@@ -26,6 +26,7 @@ interface CheckoutData {
   values: CheckoutValues;
   errors: Partial<Record<keyof CheckoutValues, string>>;
   formError?: string;
+  cartCount: number;
 }
 
 const EMPTY_VALUES: CheckoutValues = {
@@ -58,7 +59,8 @@ function validate(values: CheckoutValues) {
 
 async function buildData(user: SessionUser, values: CheckoutValues, errors: CheckoutData["errors"], formError?: string): Promise<CheckoutData> {
   const cart = await fetchCartDetails(user.id);
-  return { user, cart, values, errors, formError };
+  const cartCount = cart.cart.items.reduce((sum, item) => sum + item.quantity, 0);
+  return { user, cart, values, errors, formError, cartCount };
 }
 
 export const handler: Handlers<CheckoutData> = {
@@ -132,7 +134,7 @@ export default function CheckoutPage(props: PageProps<CheckoutData>) {
   const summary = buildOrderSummary(props.data.cart.cart.total);
 
   return (
-    <SiteLayout title="Checkout" currentPath="/checkout" user={props.data.user}>
+    <SiteLayout title="Checkout" currentPath="/checkout" user={props.data.user} cartCount={props.data.cartCount}>
       {props.data.cart.itemsWithDetails.length === 0 ? (
         <div class="rounded-2xl bg-white p-10 text-center shadow-md">
           <p class="text-lg text-gray-600">Your cart is empty.</p>

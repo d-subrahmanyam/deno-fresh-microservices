@@ -4,6 +4,7 @@ import { SiteLayout } from "../components/layout.tsx";
 import { getSessionUser, type SessionUser } from "../utils/auth.ts";
 import {
   fetchAllProducts,
+  fetchCartItemCount,
   formatCurrency,
   normalizeOrder,
   shopApi,
@@ -13,6 +14,7 @@ import {
 interface OrdersData {
   user: SessionUser;
   orders: Order[];
+  cartCount: number;
 }
 
 export const handler: Handlers<OrdersData> = {
@@ -22,9 +24,10 @@ export const handler: Handlers<OrdersData> = {
       return Response.redirect(new URL(`/login?redirect=${encodeURIComponent("/orders")}`, req.url), 303);
     }
 
-    const [ordersResult, products] = await Promise.all([
+    const [ordersResult, products, cartCount] = await Promise.all([
       shopApi<Record<string, unknown>[]>(`/api/orders?userId=${encodeURIComponent(user.id)}`),
       fetchAllProducts(),
+      fetchCartItemCount(user.id),
     ]);
     const productMap = new Map(products.map((product) => [product.id, product]));
     const orders = !ordersResult.success || !ordersResult.data
@@ -38,13 +41,13 @@ export const handler: Handlers<OrdersData> = {
           return normalized;
         });
 
-    return ctx.render({ user, orders });
+    return ctx.render({ user, orders, cartCount });
   },
 };
 
 export default function OrdersPage(props: PageProps<OrdersData>) {
   return (
-    <SiteLayout title="Order History" currentPath="/orders" user={props.data.user}>
+    <SiteLayout title="Order History" currentPath="/orders" user={props.data.user} cartCount={props.data.cartCount}>
       {props.data.orders.length === 0 ? (
         <div class="rounded-2xl bg-white p-10 text-center shadow-md">
           <p class="text-lg text-gray-600">You have not placed any orders yet.</p>

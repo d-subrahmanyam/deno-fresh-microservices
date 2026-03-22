@@ -1,10 +1,12 @@
 /** @jsxImportSource preact */
 import { Handlers, PageProps } from "$fresh/server.ts";
 import { SiteLayout } from "../components/layout.tsx";
+import { ProductCard } from "../components/product-card.tsx";
+import AsyncAddToCartButton from "../islands/AsyncAddToCartButton.tsx";
 import { getSessionUser, type SessionUser } from "../utils/auth.ts";
 import {
   fetchAllProducts,
-  formatCurrency,
+  fetchCartItemCount,
   shopApi,
   type Product,
 } from "../utils/shop.ts";
@@ -19,6 +21,8 @@ interface ProductsData {
   totalPages: number;
   totalCount: number;
   added: boolean;
+  redirectTo: string;
+  cartCount: number;
   error?: string;
 }
 
@@ -29,7 +33,13 @@ async function buildData(req: Request, user: SessionUser | null, error?: string)
   const searchQuery = url.searchParams.get("q")?.trim() || "";
   const category = url.searchParams.get("category")?.trim().toLowerCase() || "";
   const added = url.searchParams.get("added") === "1";
-  const allProducts = await fetchAllProducts();
+  const redirectParams = new URLSearchParams(url.searchParams);
+  redirectParams.delete("added");
+  const redirectTo = redirectParams.toString() ? `/products?${redirectParams.toString()}` : "/products";
+  const [allProducts, cartCount] = await Promise.all([
+    fetchAllProducts(),
+    user ? fetchCartItemCount(user.id) : Promise.resolve(0),
+  ]);
   const categories = Array.from(new Set(allProducts.map((product) => product.category))).sort();
 
   const filteredProducts = allProducts.filter((product) => {
@@ -57,6 +67,8 @@ async function buildData(req: Request, user: SessionUser | null, error?: string)
     totalPages,
     totalCount: filteredProducts.length,
     added,
+    redirectTo,
+    cartCount,
     error,
   };
 }
@@ -100,7 +112,7 @@ export default function ProductsPage(props: PageProps<ProductsData>) {
   if (props.data.category) params.set("category", props.data.category);
 
   return (
-    <SiteLayout title="Products" currentPath="/products" user={props.data.user}>
+    <SiteLayout title="Products" currentPath="/products" user={props.data.user} cartCount={props.data.cartCount}>
       <div class="space-y-8">
         <form method="GET" class="grid gap-4 rounded-2xl bg-white p-5 shadow-sm md:grid-cols-[1.5fr_1fr_auto]">
           <input
@@ -149,31 +161,20 @@ export default function ProductsPage(props: PageProps<ProductsData>) {
         ) : (
           <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
             {props.data.products.map((product) => (
-              <div key={product.id} class="overflow-hidden rounded-2xl bg-white shadow-md transition hover:-translate-y-1 hover:shadow-lg">
-                <img src={product.image} alt={product.name} class="h-44 w-full object-cover" />
-                <div class="space-y-4 p-5">
-                  <div>
-                    <p class="text-xs uppercase tracking-[0.2em] text-blue-600">{product.category}</p>
-                    <h2 class="mt-2 text-xl font-semibold text-gray-900">{product.name}</h2>
-                    <p class="mt-2 line-clamp-3 text-sm text-gray-600">{product.description}</p>
-                  </div>
-                  <div class="flex items-center justify-between">
-                    <span class="text-2xl font-bold text-gray-900">{formatCurrency(product.price)}</span>
-                    <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
-                      {product.stock} in stock
-                    </span>
-                  </div>
-                  <form method="POST" class="space-y-3">
-                    <input type="hidden" name="productId" value={product.id} />
-                    <input type="hidden" name="price" value={product.price.toString()} />
-                    <input type="hidden" name="quantity" value="1" />
-                    <input type="hidden" name="redirectTo" value={`/products?${params.toString()}`} />
-                    <button type="submit" class="w-full rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700">
-                      Add to Cart
-                    </button>
-                  </form>
-                </div>
-              </div>
+              <ProductCard
+                key={product.id}
+                product={product}
+                showStock
+                action={
+                  <AsyncAddToCartButton
+                    userId={props.data.user?.id || null}
+                    productId={product.id}
+                    price={product.price}
+                    quantity={1}
+                    redirectTo={props.data.redirectTo}
+                  />
+                }
+              />
             ))}
           </div>
         )}

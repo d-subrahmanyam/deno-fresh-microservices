@@ -2,31 +2,35 @@
 import { Handlers, PageProps } from "$fresh/server.ts";
 import { TagIcon } from "../components/icons.tsx";
 import { SiteLayout } from "../components/layout.tsx";
+import { ProductCard } from "../components/product-card.tsx";
 import { getSessionUser, type SessionUser } from "../utils/auth.ts";
-import { fetchAllProducts, formatCurrency, type Product } from "../utils/shop.ts";
+import { fetchAllProducts, fetchCartItemCount, type Product } from "../utils/shop.ts";
 
 interface HomeData {
   user: SessionUser | null;
   featuredProducts: Product[];
+  cartCount: number;
 }
 
 export const handler: Handlers<HomeData> = {
   async GET(req, ctx) {
-    const [user, products] = await Promise.all([
-      getSessionUser(req),
+    const user = await getSessionUser(req);
+    const [products, cartCount] = await Promise.all([
       fetchAllProducts(),
+      user ? fetchCartItemCount(user.id) : Promise.resolve(0),
     ]);
 
     return ctx.render({
       user,
       featuredProducts: products.slice(0, 4),
+      cartCount,
     });
   },
 };
 
 export default function HomePage(props: PageProps<HomeData>) {
   return (
-    <SiteLayout title="Welcome" currentPath="/" user={props.data.user}>
+    <SiteLayout title="Welcome" currentPath="/" user={props.data.user} cartCount={props.data.cartCount}>
       <section class="grid gap-10 rounded-[2rem] bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-8 shadow-sm lg:grid-cols-[1.1fr_0.9fr] lg:p-12">
         <div>
           <p class="text-sm uppercase tracking-[0.25em] text-blue-600">Deno + Fresh Commerce</p>
@@ -47,15 +51,7 @@ export default function HomePage(props: PageProps<HomeData>) {
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
           {props.data.featuredProducts.map((product) => (
-            <div class="overflow-hidden rounded-2xl bg-white shadow-md">
-              <img src={product.image} alt={product.name} class="h-40 w-full object-cover" />
-              <div class="space-y-2 p-4">
-                <p class="text-sm uppercase tracking-[0.2em] text-blue-600">{product.category}</p>
-                <h3 class="text-lg font-semibold text-gray-900">{product.name}</h3>
-                <p class="text-sm text-gray-500">{product.description}</p>
-                <p class="text-lg font-bold text-gray-900">{formatCurrency(product.price)}</p>
-              </div>
-            </div>
+            <ProductCard key={product.id} product={product} compact />
           ))}
         </div>
       </section>

@@ -13,6 +13,7 @@ import {
 interface CartData {
   user: SessionUser;
   cart: CartDetails;
+  cartCount: number;
 }
 
 function loginRedirect(req: Request) {
@@ -24,7 +25,8 @@ export const handler: Handlers<CartData> = {
     const user = await getSessionUser(req);
     if (!user) return loginRedirect(req);
     const cart = await fetchCartDetails(user.id);
-    return ctx.render({ user, cart });
+    const cartCount = cart.cart.items.reduce((sum, item) => sum + item.quantity, 0);
+    return ctx.render({ user, cart, cartCount });
   },
   async POST(req) {
     const user = await getSessionUser(req);
@@ -52,7 +54,7 @@ export default function CartPage(props: PageProps<CartData>) {
   const summary = buildOrderSummary(props.data.cart.cart.total);
 
   return (
-    <SiteLayout title="Shopping Cart" currentPath="/cart" user={props.data.user}>
+    <SiteLayout title="Shopping Cart" currentPath="/cart" user={props.data.user} cartCount={props.data.cartCount}>
       <div class="grid gap-8 lg:grid-cols-[1.5fr_1fr]">
         <div class="rounded-2xl bg-white p-6 shadow-md">
           {props.data.cart.itemsWithDetails.length === 0 ? (

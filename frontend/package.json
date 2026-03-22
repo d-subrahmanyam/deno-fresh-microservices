@@ -1,0 +1,8 @@
+{
+  "name": "shophub-frontend",
+  "version": "1.0.0",
+  "dependencies": {
+    "tailwindcss": "^3.3.6",
+    "postcss": "^8.4.32"
+  }
+}

@@ -136,6 +136,27 @@ cd frontend
 deno run -A --watch=static/,routes/ dev.ts
 ```
 
+### Option 3: Local Kubernetes Cluster
+
+Use the dedicated local Kubernetes profile that builds and deploys local images:
+
+```bash
+# From repository root
+./kubernetes/local/scripts/deploy.sh
+
+# In another terminal (for local access)
+./kubernetes/local/scripts/port-forward.sh
+```
+
+Then open:
+
+- Frontend: http://localhost:8000
+- API Gateway: http://localhost:3000
+
+For details, troubleshooting, and cleanup:
+
+- `kubernetes/local/README.md`
+
 ## 🗄️ Database Access
 
 ### Connect to PostgreSQL

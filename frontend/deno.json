@@ -1,4 +1,8 @@
 {
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact"
+  },
   "tasks": {
     "check": "deno fmt --check && deno lint",
     "fmt": "deno fmt",

@@ -3,14 +3,15 @@ import { ComponentChildren } from "preact";
 import {
   HomeIcon,
   ShoppingBagIcon,
-  ShoppingCartIcon,
 } from "./icons.tsx";
 import { SessionUser } from "../utils/auth.ts";
+import CartNavLink from "../islands/CartNavLink.tsx";
 
 interface SiteLayoutProps {
   title: string;
   currentPath: string;
   user: SessionUser | null;
+  cartCount?: number;
   children: ComponentChildren;
 }
 
@@ -41,13 +42,10 @@ export function SiteLayout(props: SiteLayoutProps) {
                 <ShoppingBagIcon class="w-5 h-5" />
                 Products
               </a>
-              <a
-                href="/cart"
-                class={navLinkClass(props.currentPath.startsWith("/cart") || props.currentPath.startsWith("/checkout"))}
-              >
-                <ShoppingCartIcon class="w-5 h-5" />
-                Cart
-              </a>
+              <CartNavLink
+                isActive={props.currentPath.startsWith("/cart") || props.currentPath.startsWith("/checkout")}
+                initialCount={props.cartCount ?? 0}
+              />
               {props.user
                 ? (
                   <>

@@ -223,6 +223,16 @@ export async function fetchAllProducts() {
   return result.data.map((product) => normalizeProduct(product));
 }
 
+export async function fetchCartItemCount(userId: string): Promise<number> {
+  try {
+    const result = await shopApi<Cart>(`/api/carts/${userId}`);
+    if (!result.success || !result.data) return 0;
+    return result.data.items.reduce((sum, item) => sum + item.quantity, 0);
+  } catch {
+    return 0;
+  }
+}
+
 export async function fetchCartDetails(userId: string): Promise<CartDetails> {
   const result = await shopApi<{ cart: Record<string, unknown>; itemsWithDetails: Array<Record<string, unknown>> }>(`/api/carts/${userId}/details`);
 

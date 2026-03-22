@@ -4,6 +4,7 @@ import { SiteLayout } from "../../components/layout.tsx";
 import { getSessionUser, type SessionUser } from "../../utils/auth.ts";
 import {
   fetchAllProducts,
+  fetchCartItemCount,
   formatCurrency,
   normalizeOrder,
   shopApi,
@@ -13,6 +14,7 @@ import {
 interface OrderConfirmationData {
   user: SessionUser;
   order: Order | null;
+  cartCount: number;
 }
 
 export const handler: Handlers<OrderConfirmationData> = {
@@ -23,13 +25,14 @@ export const handler: Handlers<OrderConfirmationData> = {
     }
 
     const orderId = ctx.params.id!;
-    const [orderResult, products] = await Promise.all([
+    const [orderResult, products, cartCount] = await Promise.all([
       shopApi<Record<string, unknown>>(`/api/orders/${orderId}`),
       fetchAllProducts(),
+      fetchCartItemCount(user.id),
     ]);
 
     if (!orderResult.success || !orderResult.data) {
-      return ctx.render({ user, order: null });
+      return ctx.render({ user, order: null, cartCount });
     }
 
     const productMap = new Map(products.map((product) => [product.id, product]));
@@ -39,14 +42,14 @@ export const handler: Handlers<OrderConfirmationData> = {
       productName: item.productName || productMap.get(item.productId)?.name || "Product",
     }));
 
-    return ctx.render({ user, order });
+    return ctx.render({ user, order, cartCount });
   },
 };
 
 export default function OrderConfirmationPage(props: PageProps<OrderConfirmationData>) {
   if (!props.data.order) {
     return (
-      <SiteLayout title="Order Confirmation" currentPath="/orders" user={props.data.user}>
+      <SiteLayout title="Order Confirmation" currentPath="/orders" user={props.data.user} cartCount={props.data.cartCount}>
         <div class="rounded-2xl bg-white p-10 text-center shadow-md">
           <p class="text-lg text-gray-600">We could not find that order.</p>
           <a href="/orders" class="mt-4 inline-block rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700">
@@ -59,7 +62,7 @@ export default function OrderConfirmationPage(props: PageProps<OrderConfirmation
 
   const order = props.data.order;
   return (
-    <SiteLayout title="Order Confirmation" currentPath="/orders" user={props.data.user}>
+    <SiteLayout title="Order Confirmation" currentPath="/orders" user={props.data.user} cartCount={props.data.cartCount}>
       <div class="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
         <div class="rounded-2xl bg-white p-8 shadow-md">
           <div class="rounded-xl bg-green-50 px-4 py-3 text-green-700">
