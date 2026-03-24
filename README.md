@@ -258,6 +258,8 @@ Order for $80 worth of items:
 
 ## 📖 Deployment & Setup Guides
 
+- **[Architecture](docs/ARCHITECTURE.md)** - System design, services, data model, observability, and deployment model
+- **[User & Request Flows](docs/FLOWS.md)** - End-to-end traces for every user journey (auth, browse, cart, checkout, orders) with Mermaid sequence diagrams
 - **[Quick Start Guide](docs/QUICKSTART.md)** - Get up and running in 5 minutes
 - **[Deployment Guide](docs/DEPLOYMENT.md)** - Production deployment with Kubernetes
 - **[Independent Delivery Scaling Plan](docs/SCALING_PLAN.md)** - Move from all-in releases to service-level DevOps cycles
