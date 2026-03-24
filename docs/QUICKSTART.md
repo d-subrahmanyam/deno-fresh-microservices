@@ -2,6 +2,18 @@
 
 Get the ShopHub microservices application up and running in minutes!
 
+## VS Code / Deno Setup
+
+This repository includes workspace settings in `.vscode/settings.json` so VS Code can use the Deno language server for the `services`, `shared`, and `frontend` folders.
+
+If VS Code shows errors such as `Cannot find name 'Deno'` or cannot resolve remote imports from `deno.land`:
+
+- Install the official Deno VS Code extension
+- Reload the VS Code window after opening the workspace
+- Open the repository root folder, not an individual subfolder
+
+Once the Deno extension is active, files such as `services/api-gateway/main.ts` should resolve `Deno` globals and Oak imports correctly.
+
 ## 🚀 Start with Docker Compose (Recommended for Development)
 
 ### 1. Clone or download the project
