@@ -260,8 +260,11 @@ Order for $80 worth of items:
 
 - **[Quick Start Guide](docs/QUICKSTART.md)** - Get up and running in 5 minutes
 - **[Deployment Guide](docs/DEPLOYMENT.md)** - Production deployment with Kubernetes
+- **[Independent Delivery Scaling Plan](docs/SCALING_PLAN.md)** - Move from all-in releases to service-level DevOps cycles
+- **[Kubernetes Target Structure](docs/KUBERNETES_TARGET_STRUCTURE.md)** - Proposed service-scoped Kubernetes layout and migration path
 - **[Local Kubernetes Guide](kubernetes/local/README.md)** - Build images locally and deploy to a local cluster
 - **[Project Summary](docs/PROJECT_SUMMARY.md)** - Complete component inventory
+- **[Service Ownership And Release Checklist](docs/SERVICE_OWNERSHIP_AND_RELEASE_CHECKLIST.md)** - Ownership matrix and per-service release template
 
 ## 🔍 Database Access
 

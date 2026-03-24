@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Production deployment - requires approval.
+# Update newTag to an immutable image SHA before applying.
+# Record: image tag, approver, rollback target in the release ticket.
+# To deploy:
+#   kustomize edit set image microservices/orders-service=your-registry/microservices/orders-service:git-<sha>
+#   kubectl apply -k kubernetes/overlays/production/services/orders-service
+resources:
+  - ../../../../base/services/orders-service
+images:
+  - name: microservices/orders-service
+    newTag: git-replace-me

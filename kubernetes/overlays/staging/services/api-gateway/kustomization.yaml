@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# To deploy a specific build:
+#   kustomize edit set image microservices/api-gateway=your-registry/microservices/api-gateway:git-<sha>
+#   kubectl apply -k kubernetes/overlays/staging/services/api-gateway
+resources:
+  - ../../../../base/services/api-gateway
+images:
+  - name: microservices/api-gateway
+    newTag: git-replace-me

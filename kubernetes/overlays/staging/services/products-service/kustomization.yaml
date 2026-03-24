@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# To deploy a specific build:
+#   kustomize edit set image microservices/products-service=your-registry/microservices/products-service:git-<sha>
+#   kubectl apply -k kubernetes/overlays/staging/services/products-service
+resources:
+  - ../../../../base/services/products-service
+images:
+  - name: microservices/products-service
+    newTag: git-replace-me

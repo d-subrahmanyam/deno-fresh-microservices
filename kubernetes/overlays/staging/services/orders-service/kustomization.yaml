@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# To deploy a specific build:
+#   kustomize edit set image microservices/orders-service=your-registry/microservices/orders-service:git-<sha>
+#   kubectl apply -k kubernetes/overlays/staging/services/orders-service
+resources:
+  - ../../../../base/services/orders-service
+images:
+  - name: microservices/orders-service
+    newTag: git-replace-me
