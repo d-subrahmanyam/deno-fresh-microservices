@@ -1,0 +1,8 @@
+{
+  "deno.enablePaths": [
+    "services",
+    "shared",
+    "frontend"
+  ],
+  "deno.config": "./deno.json"
+}
