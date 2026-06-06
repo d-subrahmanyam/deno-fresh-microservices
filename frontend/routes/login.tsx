@@ -1,6 +1,8 @@
 /** @jsxImportSource preact */
 import { Handlers, PageProps } from "$fresh/server.ts";
 import { SiteLayout } from "../components/layout.tsx";
+import { AlertBanner } from "../components/alert-banner.tsx";
+import { FormField } from "../components/form-field.tsx";
 import {
   authenticateUser,
   createAuthToken,
@@ -66,34 +68,17 @@ export default function LoginPage(props: PageProps<LoginData>) {
     >
       <div class="mx-auto max-w-lg rounded-2xl bg-white p-8 shadow-lg">
         <p class="mb-6 text-sm text-gray-600">
-          Sign in with one of the seeded demo users such as john@example.com and the password password123.
+          Sign in with a demo account (password: password123). Use admin@example.com for admin access or john@example.com for a customer account.
         </p>
         {props.data.error && (
-          <div class="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {props.data.error}
+          <div class="mb-6">
+            <AlertBanner variant="error" message={props.data.error} />
           </div>
         )}
         <form method="POST" class="space-y-5">
           <input type="hidden" name="redirectTo" value={props.data.redirectTo} />
-          <label class="block">
-            <span class="mb-2 block text-sm font-medium text-gray-700">Email address</span>
-            <input
-              type="email"
-              name="email"
-              value={props.data.email || ""}
-              class="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none transition focus:border-blue-500"
-              required
-            />
-          </label>
-          <label class="block">
-            <span class="mb-2 block text-sm font-medium text-gray-700">Password</span>
-            <input
-              type="password"
-              name="password"
-              class="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none transition focus:border-blue-500"
-              required
-            />
-          </label>
+          <FormField label="Email address" name="email" type="email" value={props.data.email || ""} required />
+          <FormField label="Password" name="password" type="password" required />
           <button
             type="submit"
             class="w-full rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white transition hover:bg-blue-700"

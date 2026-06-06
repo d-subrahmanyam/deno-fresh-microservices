@@ -1,7 +1,9 @@
 /** @jsxImportSource preact */
 import { Handlers, PageProps } from "$fresh/server.ts";
 import { SiteLayout } from "../../components/layout.tsx";
-import { getSessionUser, type SessionUser } from "../../utils/auth.ts";
+import { AlertBanner } from "../../components/alert-banner.tsx";
+import { EmptyState } from "../../components/empty-state.tsx";
+import { getSessionUser, loginRedirect, type SessionUser } from "../../utils/auth.ts";
 import PlausibleTracker from "../../islands/PlausibleTracker.tsx";
 import {
   fetchAllProducts,
@@ -21,9 +23,7 @@ interface OrderConfirmationData {
 export const handler: Handlers<OrderConfirmationData> = {
   async GET(req, ctx) {
     const user = await getSessionUser(req);
-    if (!user) {
-      return Response.redirect(new URL(`/login?redirect=${encodeURIComponent(new URL(req.url).pathname)}`, req.url), 303);
-    }
+    if (!user) return loginRedirect(req, new URL(req.url).pathname);
 
     const orderId = ctx.params.id!;
     const [orderResult, products, cartCount] = await Promise.all([
@@ -51,12 +51,11 @@ export default function OrderConfirmationPage(props: PageProps<OrderConfirmation
   if (!props.data.order) {
     return (
       <SiteLayout title="Order Confirmation" currentPath="/orders" user={props.data.user} cartCount={props.data.cartCount}>
-        <div class="rounded-2xl bg-white p-10 text-center shadow-md">
-          <p class="text-lg text-gray-600">We could not find that order.</p>
-          <a href="/orders" class="mt-4 inline-block rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700">
-            View Order History
-          </a>
-        </div>
+        <EmptyState
+          message="We could not find that order."
+          href="/orders"
+          linkText="View Order History"
+        />
       </SiteLayout>
     );
   }
@@ -74,9 +73,7 @@ export default function OrderConfirmationPage(props: PageProps<OrderConfirmation
       />
       <div class="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
         <div class="rounded-2xl bg-white p-8 shadow-md">
-          <div class="rounded-xl bg-green-50 px-4 py-3 text-green-700">
-            Your order has been placed successfully.
-          </div>
+          <AlertBanner variant="success" message="Your order has been placed successfully." />
           <div class="mt-6 grid gap-4 md:grid-cols-2">
             <div class="rounded-xl bg-gray-50 p-4">
               <p class="text-sm uppercase tracking-[0.2em] text-gray-500">Order ID</p>

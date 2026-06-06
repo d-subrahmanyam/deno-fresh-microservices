@@ -45,6 +45,13 @@ const DEMO_USERS: DemoUser[] = [
     role: "customer",
     password: "password123",
   },
+  {
+    id: "550e8400-e29b-41d4-a716-446655440003",
+    email: "admin@example.com",
+    name: "Admin User",
+    role: "admin",
+    password: "password123",
+  },
 ];
 
 const keyPromise = crypto.subtle.importKey(
@@ -118,4 +125,11 @@ export function setAuthCookie(headers: Headers, token: string) {
 
 export function clearAuthCookie(headers: Headers) {
   deleteCookie(headers, AUTH_COOKIE_NAME, { path: "/" });
+}
+
+export function loginRedirect(req: Request, path: string): Response {
+  return Response.redirect(
+    new URL(`/login?redirect=${encodeURIComponent(path)}`, req.url),
+    303,
+  );
 }

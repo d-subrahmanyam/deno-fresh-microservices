@@ -1,7 +1,8 @@
 /** @jsxImportSource preact */
 import { Handlers, PageProps } from "$fresh/server.ts";
 import { SiteLayout } from "../components/layout.tsx";
-import { getSessionUser, type SessionUser } from "../utils/auth.ts";
+import { EmptyState } from "../components/empty-state.tsx";
+import { getSessionUser, loginRedirect, type SessionUser } from "../utils/auth.ts";
 import {
   fetchAllProducts,
   fetchCartItemCount,
@@ -20,9 +21,7 @@ interface OrdersData {
 export const handler: Handlers<OrdersData> = {
   async GET(req, ctx) {
     const user = await getSessionUser(req);
-    if (!user) {
-      return Response.redirect(new URL(`/login?redirect=${encodeURIComponent("/orders")}`, req.url), 303);
-    }
+    if (!user) return loginRedirect(req, "/orders");
 
     const [ordersResult, products, cartCount] = await Promise.all([
       shopApi<Record<string, unknown>[]>(`/api/orders?userId=${encodeURIComponent(user.id)}`),
@@ -48,14 +47,15 @@ export const handler: Handlers<OrdersData> = {
 export default function OrdersPage(props: PageProps<OrdersData>) {
   return (
     <SiteLayout title="Order History" currentPath="/orders" user={props.data.user} cartCount={props.data.cartCount}>
-      {props.data.orders.length === 0 ? (
-        <div class="rounded-2xl bg-white p-10 text-center shadow-md">
-          <p class="text-lg text-gray-600">You have not placed any orders yet.</p>
-          <a href="/products" class="mt-4 inline-block rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700">
-            Start Shopping
-          </a>
-        </div>
-      ) : (
+      {props.data.orders.length === 0
+        ? (
+          <EmptyState
+            message="You have not placed any orders yet."
+            href="/products"
+            linkText="Start Shopping"
+          />
+        )
+        : (
         <div class="space-y-6">
           {props.data.orders.map((order) => (
             <div class="rounded-2xl bg-white p-6 shadow-md">

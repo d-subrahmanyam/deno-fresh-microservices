@@ -2,6 +2,8 @@
 import { Handlers, PageProps } from "$fresh/server.ts";
 import { SiteLayout } from "../components/layout.tsx";
 import { ProductCard } from "../components/product-card.tsx";
+import { AlertBanner } from "../components/alert-banner.tsx";
+import { Pagination } from "../components/pagination.tsx";
 import AsyncAddToCartButton from "../islands/AsyncAddToCartButton.tsx";
 import PlausibleTracker from "../islands/PlausibleTracker.tsx";
 import { getSessionUser, type SessionUser } from "../utils/auth.ts";
@@ -149,13 +151,8 @@ export default function ProductsPage(props: PageProps<ProductsData>) {
           </button>
         </form>
 
-        {(props.data.added || props.data.error) && (
-          <div class={props.data.error
-            ? "rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-            : "rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"}>
-            {props.data.error || "Item added to cart."}
-          </div>
-        )}
+        {props.data.added && <AlertBanner variant="success" message="Item added to cart." />}
+        {props.data.error && <AlertBanner variant="error" message={props.data.error} />}
 
         <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <p class="text-sm text-gray-600">
@@ -191,23 +188,12 @@ export default function ProductsPage(props: PageProps<ProductsData>) {
           </div>
         )}
 
-        <div class="flex flex-wrap gap-3">
-          {Array.from({ length: props.data.totalPages }, (_, index) => index + 1).map((page) => {
-            const pageParams = new URLSearchParams(params);
-            pageParams.set("page", page.toString());
-            return (
-              <a
-                key={page}
-                href={`/products?${pageParams.toString()}`}
-                class={page === props.data.page
-                  ? "rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white"
-                  : "rounded-lg bg-white px-4 py-2 font-semibold text-gray-700 shadow-sm hover:text-blue-600"}
-              >
-                {page}
-              </a>
-            );
-          })}
-        </div>
+        <Pagination
+          currentPage={props.data.page}
+          totalPages={props.data.totalPages}
+          basePath="/products"
+          params={params}
+        />
       </div>
     </SiteLayout>
   );

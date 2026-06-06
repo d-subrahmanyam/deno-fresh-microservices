@@ -253,6 +253,10 @@ export async function fetchAllProducts() {
   return result.data.map((product) => normalizeProduct(product));
 }
 
+export function getCartCount(cart: CartDetails): number {
+  return cart.cart.items.reduce((sum, item) => sum + item.quantity, 0);
+}
+
 export async function fetchCartItemCount(userId: string): Promise<number> {
   try {
     const result = await shopApi<Cart>(`/api/carts/${userId}`);

@@ -1,11 +1,19 @@
 /** @jsxImportSource preact */
 import { Handlers, PageProps } from "$fresh/server.ts";
 import { SiteLayout } from "../components/layout.tsx";
-import { getSessionUser, type SessionUser } from "../utils/auth.ts";
+import { FormField } from "../components/form-field.tsx";
+import { OrderSummary } from "../components/order-summary.tsx";
+import { EmptyState } from "../components/empty-state.tsx";
+import {
+  PaymentErrorBanner,
+  type PaymentErrorInfo,
+} from "../components/payment-error-banner.tsx";
+import { getSessionUser, loginRedirect, type SessionUser } from "../utils/auth.ts";
 import {
   buildOrderSummary,
   fetchCartDetails,
   formatCurrency,
+  getCartCount,
   shopApi,
   type CartDetails,
   type Order,
@@ -50,16 +58,6 @@ const EMPTY_VALUES: CheckoutValues = {
   cardExpiry: "",
   cardCvv: "",
 };
-
-function redirectToLogin(req: Request) {
-  return Response.redirect(new URL(`/login?redirect=${encodeURIComponent("/checkout")}`, req.url), 303);
-}
-
-interface PaymentErrorInfo {
-  title: string;
-  message: string;
-  hint: string;
-}
 
 const PAYMENT_ERRORS: Record<string, PaymentErrorInfo> = {
   card_declined: {
@@ -107,14 +105,15 @@ function validate(values: CheckoutValues) {
   const errors: Partial<Record<keyof CheckoutValues, string>> = {};
 
   if (!values.fullName.trim()) errors.fullName = "Full name is required.";
-  if (!values.email.trim() || !values.email.includes("@")) errors.email = "A valid email address is required.";
+  if (!values.email.trim() || !values.email.includes("@")) {
+    errors.email = "A valid email address is required.";
+  }
   if (!values.street.trim()) errors.street = "Street address is required.";
   if (!values.city.trim()) errors.city = "City is required.";
   if (!values.state.trim()) errors.state = "State is required.";
   if (!values.postalCode.trim() || values.postalCode.trim().length < 5) {
     errors.postalCode = "Postal code must be at least 5 characters.";
   }
-
   if (!values.cardHolder.trim()) errors.cardHolder = "Cardholder name is required.";
   const rawCard = values.cardNumber.replace(/\s/g, "");
   if (!rawCard || rawCard.length < 13 || rawCard.length > 19 || !/^\d+$/.test(rawCard)) {
@@ -138,20 +137,21 @@ async function buildData(
   paymentError?: PaymentErrorInfo,
 ): Promise<CheckoutData> {
   const cart = await fetchCartDetails(user.id);
-  const cartCount = cart.cart.items.reduce((sum, item) => sum + item.quantity, 0);
-  return { user, cart, values, errors, formError, paymentError, cartCount };
+  return { user, cart, values, errors, formError, paymentError, cartCount: getCartCount(cart) };
 }
 
 export const handler: Handlers<CheckoutData> = {
   async GET(req, ctx) {
     const user = await getSessionUser(req);
-    if (!user) return redirectToLogin(req);
-    return ctx.render(await buildData(user, EMPTY_VALUES, {}));
+    if (!user) return loginRedirect(req, "/checkout");
+    return ctx.render(
+      await buildData(user, { ...EMPTY_VALUES, fullName: user.name, email: user.email }, {}),
+    );
   },
   async POST(req, ctx) {
     try {
       const user = await getSessionUser(req);
-      if (!user) return redirectToLogin(req);
+      if (!user) return loginRedirect(req, "/checkout");
 
       const form = await req.formData();
       const values: CheckoutValues = {
@@ -172,7 +172,6 @@ export const handler: Handlers<CheckoutData> = {
       if (cart.itemsWithDetails.length === 0) {
         return ctx.render(await buildData(user, values, errors, "Your cart is empty."));
       }
-
       if (Object.keys(errors).length > 0) {
         return ctx.render(await buildData(user, values, errors));
       }
@@ -184,22 +183,21 @@ export const handler: Handlers<CheckoutData> = {
         price: item.price,
       }));
 
-      const shippingAddress = `${values.fullName}\n${values.street}\n${values.city}, ${values.state} ${values.postalCode}\n${values.email}`;
+      const shippingAddress =
+        `${values.fullName}\n${values.street}\n${values.city}, ${values.state} ${values.postalCode}\n${values.email}`;
+
       const orderResult = await shopApi<Order>("/api/orders", {
         method: "POST",
-        body: JSON.stringify({
-          userId: user.id,
-          items: orderItems,
-          shippingAddress,
-        }),
+        body: JSON.stringify({ userId: user.id, items: orderItems, shippingAddress }),
       });
 
       if (!orderResult.success || !orderResult.data) {
-        return ctx.render(await buildData(user, values, {}, undefined, PAYMENT_ERRORS.order_failed));
+        return ctx.render(
+          await buildData(user, values, {}, undefined, PAYMENT_ERRORS.order_failed),
+        );
       }
 
       const summary = buildOrderSummary(cart.cart.total);
-
       const paymentResult = await shopApi<Payment>("/api/payments/charge", {
         method: "POST",
         body: JSON.stringify({
@@ -221,31 +219,24 @@ export const handler: Handlers<CheckoutData> = {
           event: "payment_declined",
           userId: user.id,
           page: "/checkout",
-          properties: {
-            orderId: orderResult.data.id,
-            error: paymentResult.error,
-          },
+          properties: { orderId: orderResult.data.id, error: paymentResult.error },
         });
-        return ctx.render(await buildData(
-          user,
-          values,
-          {},
-          undefined,
-          resolvePaymentError(paymentResult.error),
-        ));
+        return ctx.render(
+          await buildData(user, values, {}, undefined, resolvePaymentError(paymentResult.error)),
+        );
       }
 
       trackEvent({
         event: "payment_succeeded",
         userId: user.id,
         page: "/checkout",
-        properties: {
-          orderId: orderResult.data.id,
-          amount: summary.total,
-        },
+        properties: { orderId: orderResult.data.id, amount: summary.total },
       });
       await shopApi("/api/carts/" + user.id, { method: "DELETE" });
-      return Response.redirect(new URL(`/order-confirmation/${orderResult.data.id}`, req.url), 303);
+      return Response.redirect(
+        new URL(`/order-confirmation/${orderResult.data.id}`, req.url),
+        303,
+      );
     } catch (error) {
       console.error(JSON.stringify({
         timestamp: new Date().toISOString(),
@@ -255,151 +246,106 @@ export const handler: Handlers<CheckoutData> = {
         message: error instanceof Error ? error.message : String(error),
       }));
       const user = await getSessionUser(req);
-      return ctx.render(await buildData(
-        user || { id: "", email: "", name: "", role: "customer" },
-        {} as any,
-        {},
-        undefined,
-        PAYMENT_ERRORS.checkout_error,
-      ));
+      return ctx.render(
+        await buildData(
+          user || { id: "", email: "", name: "", role: "customer" },
+          EMPTY_VALUES,
+          {},
+          undefined,
+          PAYMENT_ERRORS.checkout_error,
+        ),
+      );
     }
   },
 };
 
 export default function CheckoutPage(props: PageProps<CheckoutData>) {
-  const summary = buildOrderSummary(props.data.cart.cart.total);
+  const { user, cart, values, errors, paymentError, cartCount } = props.data;
+  const summary = buildOrderSummary(cart.cart.total);
 
   return (
-    <SiteLayout title="Checkout" currentPath="/checkout" user={props.data.user} cartCount={props.data.cartCount}>
-      {props.data.cart.itemsWithDetails.length > 0 && (
+    <SiteLayout title="Checkout" currentPath="/checkout" user={user} cartCount={cartCount}>
+      {cart.itemsWithDetails.length > 0 && (
         <>
           <PlausibleTracker
             event="Checkout Started"
-            props={{ userId: props.data.user.id, cartTotal: String(summary.total) }}
+            props={{ userId: user.id, cartTotal: String(summary.total) }}
           />
-          <CheckoutSubmitTracker
-            userId={props.data.user.id}
-            amount={String(summary.total)}
-          />
-          {props.data.paymentError && (
+          <CheckoutSubmitTracker userId={user.id} amount={String(summary.total)} />
+          {paymentError && (
             <PlausibleTracker
               event="Payment Failed"
-              props={{
-                userId: props.data.user.id,
-                amount: String(summary.total),
-                reason: props.data.paymentError.title,
-              }}
+              props={{ userId: user.id, amount: String(summary.total), reason: paymentError.title }}
             />
           )}
         </>
       )}
-      {props.data.cart.itemsWithDetails.length === 0 ? (
-        <div class="rounded-2xl bg-white p-10 text-center shadow-md">
-          <p class="text-lg text-gray-600">Your cart is empty.</p>
-          <a href="/products" class="mt-4 inline-block rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700">
-            Browse Products
-          </a>
-        </div>
-      ) : (
-        <div class="grid gap-8 lg:grid-cols-[1.6fr_1fr]">
-          <form method="POST" class="rounded-2xl bg-white p-8 shadow-md space-y-5">
-            {props.data.paymentError && (
-              <div class="rounded-xl border border-red-200 bg-red-50 p-4">
-                <div class="flex gap-3">
-                  <svg class="mt-0.5 h-5 w-5 flex-shrink-0 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
-                  </svg>
-                  <div>
-                    <p class="text-sm font-semibold text-red-800">{props.data.paymentError.title}</p>
-                    <p class="mt-0.5 text-sm text-red-700">{props.data.paymentError.message}</p>
-                    <p class="mt-1.5 text-xs text-red-600">{props.data.paymentError.hint}</p>
-                  </div>
+
+      {cart.itemsWithDetails.length === 0
+        ? <EmptyState message="Your cart is empty." href="/products" linkText="Browse Products" />
+        : (
+          <div class="grid gap-8 lg:grid-cols-[1.6fr_1fr]">
+            <form method="POST" class="rounded-2xl bg-white p-8 shadow-md space-y-5">
+              {paymentError && <PaymentErrorBanner error={paymentError} />}
+
+              <div class="grid gap-5 md:grid-cols-2">
+                <FormField label="Full name" name="fullName" value={values.fullName} error={errors.fullName} required />
+                <FormField label="Email address" name="email" type="email" value={values.email} error={errors.email} required />
+                <FormField label="Street address" name="street" value={values.street} error={errors.street} colSpan required />
+                <FormField label="City" name="city" value={values.city} error={errors.city} required />
+                <FormField label="State" name="state" value={values.state} error={errors.state} required />
+                <FormField label="Postal code" name="postalCode" value={values.postalCode} error={errors.postalCode} required />
+              </div>
+
+              <div class="border-t border-gray-200 pt-5">
+                <h2 class="mb-4 text-lg font-semibold text-gray-900">Payment</h2>
+                <p class="mb-4 text-xs text-gray-500">
+                  Test cards:{" "}
+                  <code class="rounded bg-gray-100 px-1">4242424242424242</code> success
+                  &nbsp;·&nbsp;
+                  <code class="rounded bg-gray-100 px-1">4000000000000002</code> declined
+                  &nbsp;·&nbsp;
+                  <code class="rounded bg-gray-100 px-1">4000000000009995</code> insufficient funds
+                </p>
+                <div class="grid gap-5 md:grid-cols-2">
+                  <FormField label="Cardholder name" name="cardHolder" value={values.cardHolder} error={errors.cardHolder} colSpan required />
+                  <FormField label="Card number" name="cardNumber" value={values.cardNumber} error={errors.cardNumber} colSpan required />
+                  <FormField label="Expiry (MM/YY)" name="cardExpiry" value={values.cardExpiry} error={errors.cardExpiry} required />
+                  <FormField label="CVV" name="cardCvv" type="password" value={values.cardCvv} error={errors.cardCvv} required />
                 </div>
               </div>
-            )}
-            <div class="grid gap-5 md:grid-cols-2">
-              {([
-                ["fullName", "Full name"],
-                ["email", "Email address"],
-                ["street", "Street address"],
-                ["city", "City"],
-                ["state", "State"],
-                ["postalCode", "Postal code"],
-              ] as const).map(([name, label]) => (
-                <label class={name === "street" ? "block md:col-span-2" : "block"}>
-                  <span class="mb-2 block text-sm font-medium text-gray-700">{label}</span>
-                  <input
-                    type={name === "email" ? "email" : "text"}
-                    name={name}
-                    value={props.data.values[name]}
-                    class="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none transition focus:border-blue-500"
-                    required
-                  />
-                  {props.data.errors[name] && (
-                    <span class="mt-2 block text-sm text-red-600">{props.data.errors[name]}</span>
-                  )}
-                </label>
-              ))}
-            </div>
-            <div class="border-t border-gray-200 pt-5">
-              <h2 class="mb-4 text-lg font-semibold text-gray-900">Payment</h2>
-              <p class="mb-4 text-xs text-gray-500">
-                Test cards: <code class="rounded bg-gray-100 px-1">4242424242424242</code> success &nbsp;·&nbsp;
-                <code class="rounded bg-gray-100 px-1">4000000000000002</code> declined &nbsp;·&nbsp;
-                <code class="rounded bg-gray-100 px-1">4000000000009995</code> insufficient funds
-              </p>
-              <div class="grid gap-5 md:grid-cols-2">
-                {([
-                  ["cardHolder", "Cardholder name"],
-                  ["cardNumber", "Card number"],
-                  ["cardExpiry", "Expiry (MM/YY)"],
-                  ["cardCvv", "CVV"],
-                ] as const).map(([name, label]) => (
-                  <label class={name === "cardHolder" || name === "cardNumber" ? "block md:col-span-2" : "block"}>
-                    <span class="mb-2 block text-sm font-medium text-gray-700">{label}</span>
-                    <input
-                      type={name === "cardCvv" ? "password" : "text"}
-                      name={name}
-                      value={props.data.values[name]}
-                      class="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none transition focus:border-blue-500"
-                      required
-                    />
-                    {props.data.errors[name] && (
-                      <span class="mt-2 block text-sm text-red-600">{props.data.errors[name]}</span>
-                    )}
-                  </label>
-                ))}
-              </div>
-            </div>
-            <button type="submit" class="rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700">
-              Place Order &amp; Pay
-            </button>
-          </form>
 
-          <div class="space-y-6">
-            <div class="rounded-2xl bg-white p-6 shadow-md">
-              <h2 class="text-xl font-semibold text-gray-900">Order Summary</h2>
-              <div class="mt-5 space-y-4">
-                {props.data.cart.itemsWithDetails.map((item) => (
-                  <div class="flex items-center justify-between gap-4 border-b border-gray-100 pb-4">
-                    <div>
-                      <p class="font-medium text-gray-900">{item.product?.name || "Product"}</p>
-                      <p class="text-sm text-gray-500">Qty {item.quantity}</p>
+              <button
+                type="submit"
+                class="rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700"
+              >
+                Place Order &amp; Pay
+              </button>
+            </form>
+
+            <div class="space-y-6">
+              <div class="rounded-2xl bg-white p-6 shadow-md">
+                <h2 class="text-xl font-semibold text-gray-900">Order Summary</h2>
+                <div class="mt-4 space-y-4">
+                  {cart.itemsWithDetails.map((item) => (
+                    <div class="flex items-center justify-between gap-4 border-b border-gray-100 pb-4">
+                      <div>
+                        <p class="font-medium text-gray-900">{item.product?.name || "Product"}</p>
+                        <p class="text-sm text-gray-500">Qty {item.quantity}</p>
+                      </div>
+                      <p class="font-semibold text-gray-900">
+                        {formatCurrency(item.price * item.quantity)}
+                      </p>
                     </div>
-                    <p class="font-semibold text-gray-900">{formatCurrency(item.price * item.quantity)}</p>
-                  </div>
-                ))}
-              </div>
-              <div class="mt-6 space-y-3 text-sm text-gray-600">
-                <div class="flex justify-between"><span>Subtotal</span><span>{formatCurrency(summary.subtotal)}</span></div>
-                <div class="flex justify-between"><span>Shipping</span><span>{summary.shipping === 0 ? "Free" : formatCurrency(summary.shipping)}</span></div>
-                <div class="flex justify-between"><span>Tax</span><span>{formatCurrency(summary.tax)}</span></div>
-                <div class="flex justify-between border-t border-gray-200 pt-3 text-lg font-semibold text-gray-900"><span>Total</span><span>{formatCurrency(summary.total)}</span></div>
+                  ))}
+                </div>
+                <div class="mt-5 border-t border-gray-200 pt-5">
+                  <OrderSummary summary={summary} />
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
     </SiteLayout>
   );
 }

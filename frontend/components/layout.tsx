@@ -57,14 +57,14 @@ export function SiteLayout(props: SiteLayoutProps) {
                     >
                       Orders
                     </a>
-                    <a
-                      href="/analytics"
-                      class={props.currentPath.startsWith("/analytics")
-                        ? "text-blue-600 font-semibold"
-                        : "text-gray-700 hover:text-blue-600"}
-                    >
-                      Analytics
-                    </a>
+                    {props.user?.role === "admin" && (
+                      <a
+                        href="/admin"
+                        class={navLinkClass(props.currentPath.startsWith("/admin"))}
+                      >
+                        Admin
+                      </a>
+                    )}
                     <span class="text-gray-500">
                       Signed in as {props.user.name}
                     </span>

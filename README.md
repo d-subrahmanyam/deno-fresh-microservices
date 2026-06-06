@@ -46,7 +46,7 @@ The database initialises with sample products and users automatically.
 - **Checkout & Payment** — shipping address form, card entry, real-time payment processing via mock gateway; user-friendly error cards for decline / insufficient-funds / processing errors
 - **Order Management** — create orders, track status (`pending → confirmed → shipped → delivered`), view history
 - **Order Confirmation** — instant confirmation with order ID and shipping details
-- **Analytics Dashboard** — `/analytics` page showing event funnel, conversion rate, and recent events
+- **Admin Panel** — role-gated `/admin` area: KPI dashboard, product CRUD (create / edit / delete), order status management, analytics dashboard
 
 ### Technical
 
@@ -278,9 +278,13 @@ interface Cart {
 ## Sample Data
 
 **Demo users** (password: `password123`):
-- `john@example.com`
-- `jane@example.com`
-- `bob@example.com`
+
+| Email | Name | Role | Access |
+|---|---|---|---|
+| `john@example.com` | John Doe | customer | Shop, cart, checkout, orders |
+| `jane@example.com` | Jane Smith | customer | Shop, cart, checkout, orders |
+| `bob@example.com` | Bob Johnson | customer | Shop, cart, checkout, orders |
+| `admin@example.com` | Admin User | admin | All of the above + Admin panel (`/admin`) |
 
 **Products** — 15+ items across: Electronics, Home & Kitchen, Sports & Outdoors, Books, Clothing, Toys, Health & Beauty
 
@@ -323,8 +327,26 @@ microservices/
 │   │   ├── cart.tsx                # Cart with CartRemoveButton island
 │   │   ├── checkout.tsx            # Checkout form + payment error cards
 │   │   ├── order-confirmation/     # Payment Success event tracking
-│   │   ├── analytics.tsx           # Internal analytics dashboard
+│   │   ├── analytics.tsx           # 301 redirect → /admin/analytics
+│   │   ├── admin/
+│   │   │   ├── _middleware.ts      # Auth + role guard for entire /admin/* tree
+│   │   │   ├── index.tsx           # KPI dashboard (revenue, orders, low-stock)
+│   │   │   ├── analytics.tsx       # Event funnel, conversion rate, recent events
+│   │   │   ├── products/
+│   │   │   │   ├── index.tsx       # Product table with edit/delete actions
+│   │   │   │   ├── new.tsx         # Create product form
+│   │   │   │   └── [id].tsx        # Edit product form (pre-filled)
+│   │   │   └── orders/
+│   │   │       └── index.tsx       # Order list with status filter + inline update
 │   │   └── api/events.ts           # Proxy route → analytics-service
+│   ├── components/
+│   │   ├── admin-layout.tsx        # Two-column sidebar layout for admin pages
+│   │   ├── alert-banner.tsx        # Success / error banner
+│   │   ├── empty-state.tsx         # Empty list CTA card
+│   │   ├── form-field.tsx          # label + input/textarea + error
+│   │   ├── order-summary.tsx       # Subtotal / shipping / tax / total rows
+│   │   ├── pagination.tsx          # Page prev/next controls
+│   │   └── payment-error-banner.tsx # Decline / insufficient-funds error card
 │   ├── islands/
 │   │   ├── AsyncAddToCartButton.tsx
 │   │   ├── CartRemoveButton.tsx    # Fires Plausible "Remove from Cart" before submit
@@ -398,6 +420,21 @@ microservices/
 ```
 
 Try a declined payment by using card `4000000000000002` — the checkout page shows a user-friendly error card instead of a raw error code.
+
+### Admin panel flow
+
+```
+1. Log in with admin@example.com / password123
+2. Click "Admin" in the top navigation bar
+3. Dashboard — view KPI cards (total orders, revenue, pending, low-stock)
+4. Products → add a new product; verify it appears on /products
+5. Products → edit an existing product (change price or stock)
+6. Products → delete a product; confirm it is removed from the customer view
+7. Orders → use the status dropdown to advance an order from pending → confirmed
+8. Analytics → review the conversion funnel and recent event log
+```
+
+Non-admin accounts (`john@example.com` etc.) receive a **403 Forbidden** if they navigate directly to `/admin`.
 
 ### Verify all services are healthy
 
