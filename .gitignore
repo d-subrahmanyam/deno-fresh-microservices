@@ -54,3 +54,11 @@ npm-debug.log*
 
 # IDE workspace
 .workspace.code-workspace
+
+# MCP / AI tooling config
+.mcp.json
+
+# Node.js artefacts (Playwright test runner, not part of the Deno project)
+package.json
+package-lock.json
+node_modules/
