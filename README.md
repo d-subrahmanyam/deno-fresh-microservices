@@ -49,7 +49,9 @@ That's it! The application initializes with sample data automatically.
 
 ### 🔧 Technical Features
 - **API Rate Limiting** - 1000 requests/minute per client IP
-- **Distributed Tracing** - X-Trace-Id header for request tracking
+- **Distributed Tracing (OTel)** - W3C `traceparent` propagation; full span tree visible in Jaeger; pluggable backends via OTel Collector
+- **Structured Logging (ELK)** - JSON logs shipped via GELF → Logstash → Elasticsearch, queryable in Kibana
+- **Analytics (Plausible)** - Self-hosted product analytics for page views and custom events
 - **Health Checks** - Real-time service health monitoring
 - **Error Handling** - Comprehensive error messages and HTTP status codes
 - **Database Migrations** - Automatic schema setup on container start
@@ -262,11 +264,25 @@ Order for $80 worth of items:
 - **[User & Request Flows](docs/FLOWS.md)** - End-to-end traces for every user journey (auth, browse, cart, checkout, orders) with Mermaid sequence diagrams
 - **[Quick Start Guide](docs/QUICKSTART.md)** - Get up and running in 5 minutes
 - **[Deployment Guide](docs/DEPLOYMENT.md)** - Production deployment with Kubernetes
+- **[OpenTelemetry Tracing](docs/OTEL.md)** - OTel implementation, span tree walkthrough, adding new trace backends (Datadog, Tempo, Honeycomb)
+- **[Observability & ELK](docs/OBSERVABILITY.md)** - Structured logging, GELF pipeline, Logstash config, Kibana dashboards
+- **[Plausible Analytics](docs/PLAUSIBLE.md)** - Self-hosted product analytics setup and event catalogue
+- **[Payment Services](docs/PAYMENT_SERVICES.md)** - Payment gateway + mock processor architecture and test cards
 - **[Independent Delivery Scaling Plan](docs/SCALING_PLAN.md)** - Move from all-in releases to service-level DevOps cycles
 - **[Kubernetes Target Structure](docs/KUBERNETES_TARGET_STRUCTURE.md)** - Proposed service-scoped Kubernetes layout and migration path
 - **[Local Kubernetes Guide](kubernetes/local/README.md)** - Build images locally and deploy to a local cluster
 - **[Project Summary](docs/PROJECT_SUMMARY.md)** - Complete component inventory
 - **[Service Ownership And Release Checklist](docs/SERVICE_OWNERSHIP_AND_RELEASE_CHECKLIST.md)** - Ownership matrix and per-service release template
+
+## 📡 Observability UIs
+
+| UI | URL | Purpose |
+|----|-----|---------|
+| **Jaeger** | http://localhost:16686 | Distributed trace explorer — span trees across services |
+| **Kibana** | http://localhost:5601 | Log search and dashboards |
+| **Plausible** | http://localhost:8001 | Product analytics (page views, custom events) |
+
+> All three UIs are started automatically with the full stack command (see Quick Start).
 
 ## 🔍 Database Access
 
@@ -391,7 +407,6 @@ REDIS_URL=redis://localhost:6379
 - Introduce wishlist support with add-to-cart shortcuts
 - Improve order item enrichment to persist product names/images at order time
 - Add inventory reservation and stock decrement on confirmed checkout
-- Add structured logging across all services with a shared log schema
 - Add Prometheus metrics and alerting for latency, error rates, and resource usage
 - Add horizontal autoscaling policies for Kubernetes deployments
 - Evaluate service discovery evolution: stay with Kubernetes-native discovery or add Consul when scale justifies it
@@ -417,10 +432,15 @@ REDIS_URL=redis://localhost:6379
 - **Redis** - In-memory cache and pub/sub for carts
 - **djwt** - JWT token generation and verification
 
-### DevOps
+### DevOps & Observability
 - **Docker** - Containerization
 - **Docker Compose** - Multi-service orchestration
 - **Kubernetes** - Production-grade orchestration (optional)
+- **OpenTelemetry** - Vendor-neutral distributed tracing SDK (W3C traceparent)
+- **OTel Collector** - Pluggable trace routing (swap backends without code changes)
+- **Jaeger** - Distributed trace UI
+- **ELK Stack** - Structured log pipeline (Logstash → Elasticsearch → Kibana)
+- **Plausible CE** - Self-hosted product analytics
 
 ## 📄 License
 

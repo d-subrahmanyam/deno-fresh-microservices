@@ -2,6 +2,7 @@
 import { Handlers, PageProps } from "$fresh/server.ts";
 import { SiteLayout } from "../components/layout.tsx";
 import { getSessionUser, type SessionUser } from "../utils/auth.ts";
+import CartRemoveButton from "../islands/CartRemoveButton.tsx";
 import {
   buildOrderSummary,
   fetchCartDetails,
@@ -100,9 +101,10 @@ export default function CartPage(props: PageProps<CartData>) {
                     <form method="POST">
                       <input type="hidden" name="action" value="remove" />
                       <input type="hidden" name="productId" value={item.productId} />
-                      <button type="submit" class="w-full rounded-lg border border-red-200 px-4 py-2 font-semibold text-red-600 hover:bg-red-50">
-                        Remove
-                      </button>
+                      <CartRemoveButton
+                        productId={item.productId}
+                        userId={props.data.user.id}
+                      />
                     </form>
                   </div>
                 </div>

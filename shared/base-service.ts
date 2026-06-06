@@ -6,6 +6,17 @@ import {
   Middleware,
 } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 import { HealthStatus, ComponentHealth } from "./types/mod.ts";
+import {
+  initTelemetry,
+  shutdownTelemetry,
+  getTracer,
+  trace,
+  propagation,
+  context,
+  SpanKind,
+  SpanStatusCode,
+  ROOT_CONTEXT,
+} from "./utils/telemetry.ts";
 
 export interface ServiceConfig {
   name: string;
@@ -26,46 +37,92 @@ export abstract class BaseService {
     this.router = new Router();
     this.startTime = Date.now();
 
+    initTelemetry(config.name, config.version);
     this.setupMiddleware();
     this.setupHealthEndpoints();
   }
 
   private setupMiddleware() {
-    this.app.use(this.loggingMiddleware());
+    // OTel spans must be outermost so all downstream middleware runs inside
+    // context.with(), enabling automatic context propagation via AsyncLocalStorage.
     this.app.use(this.tracingMiddleware());
+    this.app.use(this.loggingMiddleware());
     this.app.use(this.errorMiddleware());
   }
 
   private loggingMiddleware(): Middleware {
     return async (ctx, next) => {
       const start = Date.now();
-      const traceId = ctx.request.headers.get("X-Trace-Id") ||
-        crypto.randomUUID();
-
-      ctx.state.traceId = traceId;
-
       await next();
-
       const duration = Date.now() - start;
-      const logEntry = {
+      const status = ctx.response.status;
+      console.log(JSON.stringify({
         timestamp: new Date().toISOString(),
         service: this.config.name,
-        traceId,
+        traceId: ctx.state.traceId,
+        level: status >= 500 ? "error" : status >= 400 ? "warn" : "info",
         method: ctx.request.method,
         url: ctx.request.url.pathname,
-        status: ctx.response.status,
-        duration: `${duration}ms`,
-      };
-
-      console.log(JSON.stringify(logEntry));
+        status,
+        durationMs: duration,
+      }));
     };
   }
 
   private tracingMiddleware(): Middleware {
+    const tracer = getTracer(this.config.name);
     return async (ctx, next) => {
-      const traceId = ctx.state.traceId || crypto.randomUUID();
+      // Extract W3C traceparent/tracestate from the incoming request
+      const inCarrier: Record<string, string> = {};
+      ctx.request.headers.forEach((v, k) => { inCarrier[k] = v; });
+      const parentCtx = propagation.extract(ROOT_CONTEXT, inCarrier);
+
+      // Create an HTTP server span
+      const span = tracer.startSpan(
+        `${ctx.request.method} ${ctx.request.url.pathname}`,
+        {
+          kind: SpanKind.SERVER,
+          attributes: {
+            "http.method": ctx.request.method,
+            "http.target": ctx.request.url.pathname,
+            "http.host": ctx.request.headers.get("host") ?? "",
+          },
+        },
+        parentCtx,
+      );
+
+      const activeCtx = trace.setSpan(parentCtx, span);
+
+      // Use the OTel trace ID when recording; fall back to UUID for no-op spans
+      const traceId = span.isRecording()
+        ? span.spanContext().traceId
+        : (ctx.request.headers.get("X-Trace-Id") || crypto.randomUUID());
+
+      ctx.state.traceId = traceId;
       ctx.response.headers.set("X-Trace-Id", traceId);
-      await next();
+
+      // Propagate traceparent downstream so browsers / other services continue the trace
+      const outCarrier: Record<string, string> = {};
+      propagation.inject(activeCtx, outCarrier);
+      for (const [k, v] of Object.entries(outCarrier)) {
+        ctx.response.headers.set(k, v);
+      }
+
+      try {
+        await context.with(activeCtx, async () => { await next(); });
+        span.setAttribute("http.status_code", ctx.response.status);
+        span.setStatus({
+          code: ctx.response.status >= 500 ? SpanStatusCode.ERROR : SpanStatusCode.OK,
+        });
+      } catch (err) {
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: err instanceof Error ? err.message : String(err),
+        });
+        throw err;
+      } finally {
+        span.end();
+      }
     };
   }
 
@@ -82,6 +139,7 @@ export abstract class BaseService {
             timestamp: new Date().toISOString(),
             service: this.config.name,
             traceId: ctx.state.traceId,
+            level: "error",
             error: message,
             stack: error instanceof Error ? error.stack : undefined,
           })
@@ -158,9 +216,7 @@ export abstract class BaseService {
     Deno.addSignalListener("SIGINT", () => this.shutdown(abortController));
     Deno.addSignalListener("SIGTERM", () => this.shutdown(abortController));
 
-    console.log(
-      `${this.config.name} starting on port ${this.config.port}`
-    );
+    console.log(JSON.stringify({ timestamp: new Date().toISOString(), service: this.config.name, level: "info", event: "startup", port: this.config.port, version: this.config.version }));
 
     await this.app.listen({
       port: this.config.port,
@@ -169,7 +225,7 @@ export abstract class BaseService {
   }
 
   private async shutdown(controller: AbortController) {
-    console.log(`${this.config.name} shutting down gracefully...`);
+    console.log(JSON.stringify({ timestamp: new Date().toISOString(), service: this.config.name, level: "info", event: "shutdown_started" }));
     this.isShuttingDown = true;
 
     await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -177,10 +233,10 @@ export abstract class BaseService {
     await this.cleanup();
 
     controller.abort();
-    console.log(`${this.config.name} shutdown complete`);
+    console.log(JSON.stringify({ timestamp: new Date().toISOString(), service: this.config.name, level: "info", event: "shutdown_complete" }));
   }
 
   protected async cleanup(): Promise<void> {
-    // Default implementation does nothing
+    await shutdownTelemetry();
   }
 }

@@ -1,0 +1,52 @@
+# OpenTelemetry Collector — receives OTLP from all services, fans out to backends.
+#
+# To add a new backend (Datadog, Honeycomb, Grafana Tempo, Zipkin …) add an
+# exporter block here and reference it in the pipeline — no service code changes needed.
+#
+# Ports:
+#   4317 — OTLP gRPC  (alternative for gRPC clients)
+#   4318 — OTLP HTTP  (used by all Deno services via fetch)
+#   8888 — Collector self-metrics (Prometheus scrape)
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+
+  # Stamp every span with the deployment environment
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: development
+        action: insert
+
+exporters:
+  # Jaeger — distributed trace UI at http://localhost:16686
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+
+  # Debug — prints a one-line summary per batch to the collector log.
+  # Swap verbosity to "detailed" to see full span payloads.
+  debug:
+    verbosity: basic
+
+service:
+  telemetry:
+    logs:
+      level: warn
+
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch, resource]
+      exporters: [otlp/jaeger, debug]

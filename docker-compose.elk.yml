@@ -1,0 +1,153 @@
+version: '3.8'
+
+# ELK + OpenTelemetry overlay — run alongside the main compose file:
+#   docker-compose -f docker-compose.yml -f docker-compose.elk.yml up --build
+#
+# Telemetry pipeline:
+#   Logs  — GELF driver → Logstash → Elasticsearch → Kibana  (http://localhost:5601)
+#   Traces — OTLP/HTTP  → OTel Collector → Jaeger            (http://localhost:16686)
+#
+# To plug in a different trace backend (Datadog, Honeycomb, Grafana Tempo …) edit
+# observability/otel-collector.yml — no service code changes needed.
+
+services:
+  # ─── OpenTelemetry Collector ────────────────────────────────────────────────
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.96.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./observability/otel-collector.yml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP  ← services send here
+      - "8888:8888"   # Collector self-metrics
+    depends_on:
+      - jaeger
+    networks:
+      - microservices
+
+  # ─── Jaeger all-in-one (trace storage + UI) ─────────────────────────────────
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.54
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"   # Jaeger UI
+    networks:
+      - microservices
+
+  # ─── ELK stack ──────────────────────────────────────────────────────────────
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -qE '\"status\":\"(green|yellow)\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    networks:
+      - microservices
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    ports:
+      - "5601:5601"
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - microservices
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    ports:
+      - "12201:12201/udp"   # GELF input — Docker logging driver sends here
+      - "5044:5044"          # Beats input kept for future use
+    volumes:
+      - ./observability/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+    environment:
+      - "LS_JAVA_OPTS=-Xms256m -Xmx256m"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - microservices
+
+  # Filebeat removed — rootless Docker restricts log file/socket access.
+  # Services now ship logs via Docker's GELF driver directly to Logstash.
+
+  # ─── Service overrides: inject OTEL env vars ────────────────────────────────
+  # These merge with docker-compose.yml definitions. Each service gets the
+  # collector endpoint + its own service name for span labelling in Jaeger.
+
+  api-gateway:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: api-gateway
+    depends_on:
+      otel-collector:
+        condition: service_started
+
+  products-service:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: products-service
+    depends_on:
+      otel-collector:
+        condition: service_started
+
+  orders-service:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: orders-service
+    depends_on:
+      otel-collector:
+        condition: service_started
+
+  cart-service:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: cart-service
+    depends_on:
+      otel-collector:
+        condition: service_started
+
+  analytics-service:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: analytics-service
+    depends_on:
+      otel-collector:
+        condition: service_started
+
+  payment-gateway:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: payment-gateway
+    depends_on:
+      otel-collector:
+        condition: service_started
+
+  payment-processor:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: payment-processor
+    depends_on:
+      otel-collector:
+        condition: service_started
+
+volumes:
+  elasticsearch_data:

@@ -30,6 +30,6 @@ ENV DENO_DIR=/deno-dir
 EXPOSE 3004
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD deno eval --allow-net 'const response = await fetch("http://127.0.0.1:3004/health"); if (!response.ok) Deno.exit(1);'
+  CMD sh -c 'printf "const r=await fetch(\"http://127.0.0.1:3004/health\");Deno.exit(r.ok?0:1);" | deno run --allow-net -'
 
 CMD ["deno", "run", "--allow-net", "--allow-env", "--allow-read", "services/orders-service/main.ts"]

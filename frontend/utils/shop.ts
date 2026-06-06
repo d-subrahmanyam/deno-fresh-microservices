@@ -67,6 +67,20 @@ export interface OrderSummary {
   total: number;
 }
 
+export interface Payment {
+  id: string;
+  orderId: string;
+  userId: string;
+  amount: number;
+  currency: string;
+  status: string;
+  provider: string;
+  providerTransactionId?: string;
+  failureReason?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 const PRODUCT_IMAGE_MAP: Record<string, string> = {
   "headphones.svg": "/images/headphones.svg",
   "headphones.jpg": "/images/headphones.svg",
@@ -195,7 +209,15 @@ export async function shopApi<T>(path: string, init: RequestInit = {}) {
 
   if (!response.ok) {
     const text = await response.text();
-    console.error(`[shopApi ${response.status}] ${url}:`, text.substring(0, 500));
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      service: "frontend",
+      level: "error",
+      event: "api_error",
+      status: response.status,
+      url,
+      message: text.substring(0, 500),
+    }));
     throw new Error(`HTTP ${response.status}: ${text.substring(0, 200)}`);
   }
 
@@ -208,7 +230,15 @@ export async function shopApi<T>(path: string, init: RequestInit = {}) {
     const payload = JSON.parse(text) as ApiEnvelope<T>;
     return payload;
   } catch (e) {
-    console.error(`[shopApi JSON parse error] ${url}:`, text.substring(0, 500));
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      service: "frontend",
+      level: "error",
+      event: "json_parse_error",
+      url,
+      message: e instanceof Error ? e.message : String(e),
+      body: text.substring(0, 500),
+    }));
     throw new Error(`Failed to parse JSON from ${url}: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
