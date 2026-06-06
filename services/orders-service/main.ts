@@ -151,6 +151,18 @@ class OrdersService extends BaseService {
         JSON.stringify({ orderId: id, userId: data.userId })
       );
 
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        service: "orders-service",
+        traceId,
+        level: "info",
+        event: "order_created",
+        orderId: id,
+        userId: data.userId,
+        total,
+        itemCount: data.items.length,
+      }));
+
       const order: Order = {
         id,
         userId: data.userId,

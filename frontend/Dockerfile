@@ -27,8 +27,8 @@ WORKDIR /app
 # Copy all project files
 COPY . .
 
-# Cache dependencies
-RUN deno cache dev.ts
+# Cache dependencies (--no-lock avoids npm registry validation failures in Docker build networks)
+RUN deno cache --no-lock dev.ts
 
 # Production stage
 FROM denoland/deno:1.40.0
@@ -49,4 +49,4 @@ ENV DENO_DIR=/deno-dir
 
 EXPOSE 8000
 
-CMD ["deno", "run", "--allow-all", "main.ts"]
+CMD ["deno", "run", "--allow-all", "--no-lock", "main.ts"]

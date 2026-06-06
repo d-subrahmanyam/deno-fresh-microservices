@@ -2,6 +2,9 @@
 
 import * as $$0 from "./islands/AsyncAddToCartButton.tsx";
 import * as $$1 from "./islands/CartNavLink.tsx";
+import * as $$2 from "./islands/PlausibleTracker.tsx";
+import * as $$3 from "./islands/CartRemoveButton.tsx";
+import * as $$4 from "./islands/CheckoutSubmitTracker.tsx";
 import * as $0 from "./routes/_app.tsx";
 import * as $1 from "./routes/index.tsx";
 import * as $2 from "./routes/products.tsx";
@@ -12,6 +15,8 @@ import * as $6 from "./routes/checkout.tsx";
 import * as $7 from "./routes/orders.tsx";
 import * as $8 from "./routes/order-confirmation/[id].tsx";
 import * as $9 from "./routes/api/carts/[userId]/items.ts";
+import * as $10 from "./routes/analytics.tsx";
+import * as $11 from "./routes/api/events.ts";
 
 const manifest = {
   routes: {
@@ -25,10 +30,15 @@ const manifest = {
     "./routes/orders.tsx": $7,
     "./routes/order-confirmation/[id].tsx": $8,
     "./routes/api/carts/[userId]/items.ts": $9,
+    "./routes/analytics.tsx": $10,
+    "./routes/api/events.ts": $11,
   },
   islands: {
     "./islands/AsyncAddToCartButton.tsx": $$0,
     "./islands/CartNavLink.tsx": $$1,
+    "./islands/PlausibleTracker.tsx": $$2,
+    "./islands/CartRemoveButton.tsx": $$3,
+    "./islands/CheckoutSubmitTracker.tsx": $$4,
   },
   baseUrl: import.meta.url,
 };

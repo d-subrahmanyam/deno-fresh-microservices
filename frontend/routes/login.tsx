@@ -49,7 +49,10 @@ export const handler: Handlers<LoginData> = {
     const token = await createAuthToken(user);
     const headers = new Headers();
     setAuthCookie(headers, token);
-    headers.set("location", redirectTo);
+    // Append ?from=login so the landing page can fire a Plausible Login event
+    const dest = new URL(redirectTo.startsWith("/") ? redirectTo : `/${redirectTo}`, req.url);
+    dest.searchParams.set("from", "login");
+    headers.set("location", dest.toString());
     return new Response(null, { status: 303, headers });
   },
 };

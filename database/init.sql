@@ -66,12 +66,74 @@ CREATE TABLE IF NOT EXISTS orders (
   updated_at TIMESTAMP NOT NULL
 );
 
+-- Add shipping_address column if upgrading from older schema
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_address TEXT;
+
 -- Insert sample orders
 INSERT INTO orders (id, user_id, items, total, status, created_at, updated_at) VALUES
   ('750e8400-e29b-41d4-a716-446655440000', '550e8400-e29b-41d4-a716-446655440000', 
    '[{"productId":"650e8400-e29b-41d4-a716-446655440000","quantity":1,"price":79.99}]', 
    79.99, 'confirmed', NOW() - INTERVAL '2 days', NOW() - INTERVAL '1 day'),
-  ('750e8400-e29b-41d4-a716-446655440001', '550e8400-e29b-41d4-a716-446655440001', 
-   '[{"productId":"650e8400-e29b-41d4-a716-446655440001","quantity":2,"price":12.99},{"productId":"650e8400-e29b-41d4-a716-446655440002","quantity":1,"price":49.99}]', 
+  ('750e8400-e29b-41d4-a716-446655440001', '550e8400-e29b-41d4-a716-446655440001',
+   '[{"productId":"650e8400-e29b-41d4-a716-446655440001","quantity":2,"price":12.99},{"productId":"650e8400-e29b-41d4-a716-446655440002","quantity":1,"price":49.99}]',
    75.97, 'pending', NOW(), NOW())
 ON CONFLICT DO NOTHING;
+
+-- Payment processor database
+SELECT 'CREATE DATABASE payment_processor'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'payment_processor')\gexec
+\connect payment_processor;
+
+CREATE TABLE IF NOT EXISTS transactions (
+  id UUID PRIMARY KEY,
+  type VARCHAR(20) NOT NULL,
+  amount DECIMAL(10, 2) NOT NULL,
+  currency VARCHAR(3) NOT NULL DEFAULT 'USD',
+  status VARCHAR(20) NOT NULL,
+  card_last4 VARCHAR(4),
+  card_brand VARCHAR(50),
+  decline_code VARCHAR(100),
+  parent_transaction_id UUID,
+  created_at TIMESTAMP NOT NULL
+);
+
+-- Payments database (gateway)
+SELECT 'CREATE DATABASE payments'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'payments')\gexec
+\connect payments;
+
+CREATE TABLE IF NOT EXISTS payments (
+  id UUID PRIMARY KEY,
+  order_id VARCHAR(255) NOT NULL,
+  user_id VARCHAR(255) NOT NULL,
+  amount DECIMAL(10, 2) NOT NULL,
+  currency VARCHAR(3) NOT NULL DEFAULT 'USD',
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  provider VARCHAR(50) NOT NULL,
+  provider_transaction_id VARCHAR(255),
+  failure_reason TEXT,
+  metadata JSONB,
+  created_at TIMESTAMP NOT NULL,
+  updated_at TIMESTAMP NOT NULL
+);
+
+-- Analytics database
+SELECT 'CREATE DATABASE analytics'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'analytics')\gexec
+\connect analytics;
+
+CREATE TABLE IF NOT EXISTS events (
+  id UUID PRIMARY KEY,
+  event VARCHAR(100) NOT NULL,
+  session_id VARCHAR(255),
+  user_id VARCHAR(255),
+  trace_id VARCHAR(255),
+  properties JSONB NOT NULL DEFAULT '{}',
+  page TEXT,
+  user_agent TEXT,
+  created_at TIMESTAMP NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_event ON events(event);
+CREATE INDEX IF NOT EXISTS idx_events_user_id ON events(user_id);
+CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at DESC);

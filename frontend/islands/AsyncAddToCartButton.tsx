@@ -1,5 +1,6 @@
 /** @jsxImportSource preact */
 import { useState } from "preact/hooks";
+import { trackEvent } from "../utils/analytics.ts";
 
 interface AsyncAddToCartButtonProps {
   userId: string | null;
@@ -60,6 +61,23 @@ export default function AsyncAddToCartButton(props: AsyncAddToCartButtonProps) {
           detail: { delta: quantity },
         }),
       );
+      trackEvent({
+        event: "add_to_cart",
+        userId: props.userId ?? undefined,
+        page: props.redirectTo,
+        properties: { productId: props.productId, price: props.price, quantity },
+      });
+      const plausible = (globalThis as any).plausible;
+      if (typeof plausible === "function") {
+        plausible("Add to Cart", {
+          props: {
+            productId: props.productId,
+            price: String(props.price),
+            quantity: String(quantity),
+            userId: props.userId ?? "anonymous",
+          },
+        });
+      }
       setStatusMessage("Added to cart.");
     } catch {
       setStatusMessage("Unable to add item right now.");

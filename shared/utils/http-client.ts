@@ -1,5 +1,6 @@
-// HTTP client for inter-service communication with retry and tracing support
+// HTTP client for inter-service communication with retry, tracing, and OTel support
 import { ApiResponse } from "../types/mod.ts";
+import { trace, propagation, context, SpanKind, SpanStatusCode } from "./telemetry.ts";
 
 interface RequestOptions {
   headers?: Record<string, string>;
@@ -19,7 +20,7 @@ export class ServiceClient {
     this.defaultTimeout = defaultTimeout;
   }
 
-  // Make HTTP request with automatic retry and timeout handling
+  // Make HTTP request with automatic retry, timeout, and distributed tracing
   async request<T>(
     method: string,
     path: string,
@@ -33,14 +34,31 @@ export class ServiceClient {
       traceId,
     } = options;
 
-    const requestTraceId = traceId || crypto.randomUUID();
+    // Create an outgoing CLIENT span as a child of whatever span is active
+    const activeCtx = context.active();
+    const tracer = trace.getTracer(this.serviceName);
+    const span = tracer.startSpan(`HTTP ${method} ${this.serviceName}`, {
+      kind: SpanKind.CLIENT,
+      attributes: {
+        "http.method": method,
+        "http.url": `${this.baseUrl}${path}`,
+        "peer.service": this.serviceName,
+      },
+    }, activeCtx);
+
+    const spanCtx = trace.setSpan(activeCtx, span);
 
     const requestHeaders: Record<string, string> = {
       "Content-Type": "application/json",
-      "X-Trace-Id": requestTraceId,
       "X-Source-Service": this.serviceName,
       ...headers,
     };
+
+    // Keep X-Trace-Id for backward compat with log correlation
+    if (traceId) requestHeaders["X-Trace-Id"] = traceId;
+
+    // Inject W3C traceparent so the receiving service continues the trace tree
+    propagation.inject(spanCtx, requestHeaders);
 
     let lastError: Error | null = null;
 
@@ -59,6 +77,9 @@ export class ServiceClient {
         clearTimeout(timeoutId);
 
         const data = await response.json();
+        span.setAttribute("http.status_code", response.status);
+        span.setStatus({ code: response.ok ? SpanStatusCode.OK : SpanStatusCode.ERROR });
+        span.end();
         return data as ApiResponse<T>;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
@@ -75,11 +96,14 @@ export class ServiceClient {
       }
     }
 
+    span.setStatus({ code: SpanStatusCode.ERROR, message: lastError?.message ?? "unknown" });
+    span.end();
+
     return {
       success: false,
       error: `Service ${this.serviceName} unavailable: ${lastError?.message}`,
       timestamp: new Date().toISOString(),
-      traceId: requestTraceId,
+      traceId,
     };
   }
 

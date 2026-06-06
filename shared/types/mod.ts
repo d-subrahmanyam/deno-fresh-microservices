@@ -94,3 +94,58 @@ export interface ServiceRegistration {
   tags: string[];
   healthEndpoint: string;
 }
+
+// Payment types
+
+export enum PaymentStatus {
+  PENDING = "pending",
+  PROCESSING = "processing",
+  AUTHORIZED = "authorized",
+  CAPTURED = "captured",
+  FAILED = "failed",
+  VOIDED = "voided",
+  REFUNDED = "refunded",
+}
+
+export interface PaymentMethod {
+  cardNumber: string;
+  cardExpiry: string;
+  cardCvv: string;
+  cardHolder: string;
+}
+
+export interface Payment {
+  id: string;
+  orderId: string;
+  userId: string;
+  amount: number;
+  currency: string;
+  status: PaymentStatus;
+  provider: string;
+  providerTransactionId?: string;
+  failureReason?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ChargeRequest {
+  orderId: string;
+  userId: string;
+  amount: number;
+  currency: string;
+  paymentMethod: PaymentMethod;
+}
+
+export interface ProcessorTransaction {
+  id: string;
+  type: "charge" | "authorize" | "capture" | "void" | "refund";
+  amount: number;
+  currency: string;
+  status: "success" | "declined" | "error";
+  cardLast4: string;
+  cardBrand: string;
+  declineCode?: string;
+  parentTransactionId?: string;
+  createdAt: Date;
+}

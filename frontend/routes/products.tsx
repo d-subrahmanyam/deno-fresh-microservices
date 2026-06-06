@@ -3,6 +3,7 @@ import { Handlers, PageProps } from "$fresh/server.ts";
 import { SiteLayout } from "../components/layout.tsx";
 import { ProductCard } from "../components/product-card.tsx";
 import AsyncAddToCartButton from "../islands/AsyncAddToCartButton.tsx";
+import PlausibleTracker from "../islands/PlausibleTracker.tsx";
 import { getSessionUser, type SessionUser } from "../utils/auth.ts";
 import {
   fetchAllProducts,
@@ -23,6 +24,7 @@ interface ProductsData {
   added: boolean;
   redirectTo: string;
   cartCount: number;
+  fromLogin: boolean;
   error?: string;
 }
 
@@ -33,6 +35,7 @@ async function buildData(req: Request, user: SessionUser | null, error?: string)
   const searchQuery = url.searchParams.get("q")?.trim() || "";
   const category = url.searchParams.get("category")?.trim().toLowerCase() || "";
   const added = url.searchParams.get("added") === "1";
+  const fromLogin = url.searchParams.get("from") === "login";
   const redirectParams = new URLSearchParams(url.searchParams);
   redirectParams.delete("added");
   const redirectTo = redirectParams.toString() ? `/products?${redirectParams.toString()}` : "/products";
@@ -69,6 +72,7 @@ async function buildData(req: Request, user: SessionUser | null, error?: string)
     added,
     redirectTo,
     cartCount,
+    fromLogin,
     error,
   };
 }
@@ -113,6 +117,13 @@ export default function ProductsPage(props: PageProps<ProductsData>) {
 
   return (
     <SiteLayout title="Products" currentPath="/products" user={props.data.user} cartCount={props.data.cartCount}>
+      {props.data.fromLogin && props.data.user && (
+        <PlausibleTracker
+          event="Login"
+          props={{ userId: props.data.user.id }}
+          stripParam="from"
+        />
+      )}
       <div class="space-y-8">
         <form method="GET" class="grid gap-4 rounded-2xl bg-white p-5 shadow-sm md:grid-cols-[1.5fr_1fr_auto]">
           <input
@@ -124,6 +135,7 @@ export default function ProductsPage(props: PageProps<ProductsData>) {
           />
           <select
             name="category"
+            title="Filter by category"
             value={props.data.category}
             class="rounded-xl border border-gray-300 px-4 py-3 outline-none transition focus:border-blue-500"
           >

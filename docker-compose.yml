@@ -34,6 +34,92 @@ services:
     networks:
       - microservices
 
+  # Payment Processor Service (internal mock — not exposed beyond the microservices network)
+  payment-processor:
+    build:
+      context: .
+      dockerfile: ./services/payment-processor/Dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      PORT: "3002"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: payment_processor
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging:
+      driver: gelf
+      options:
+        gelf-address: "udp://localhost:12201"
+        tag: "payment-processor"
+    networks:
+      - microservices
+
+  # Payment Gateway Service (pluggable provider facade)
+  payment-gateway:
+    build:
+      context: .
+      dockerfile: ./services/payment-gateway/Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: "3001"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: payments
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      PAYMENT_PROCESSOR_URL: http://payment-processor:3002
+      ORDERS_SERVICE_URL: http://orders-service:3004
+      PAYMENT_PROVIDER: mock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      payment-processor:
+        condition: service_started
+      orders-service:
+        condition: service_started
+    logging:
+      driver: gelf
+      options:
+        gelf-address: "udp://localhost:12201"
+        tag: "payment-gateway"
+    networks:
+      - microservices
+
+  # Analytics Service
+  analytics-service:
+    build:
+      context: .
+      dockerfile: ./services/analytics-service/Dockerfile
+    ports:
+      - "3006:3006"
+    environment:
+      PORT: "3006"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: analytics
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging:
+      driver: gelf
+      options:
+        gelf-address: "udp://localhost:12201"
+        tag: "analytics-service"
+    networks:
+      - microservices
+
   # API Gateway
   api-gateway:
     build:
@@ -46,10 +132,19 @@ services:
       PRODUCTS_SERVICE_URL: http://products-service:3003
       ORDERS_SERVICE_URL: http://orders-service:3004
       CART_SERVICE_URL: http://cart-service:3005
+      PAYMENT_GATEWAY_SERVICE_URL: http://payment-gateway:3001
+      ANALYTICS_SERVICE_URL: http://analytics-service:3006
     depends_on:
       - products-service
       - orders-service
       - cart-service
+      - payment-gateway
+      - analytics-service
+    logging:
+      driver: gelf
+      options:
+        gelf-address: "udp://localhost:12201"
+        tag: "api-gateway"
     networks:
       - microservices
 
@@ -70,6 +165,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    logging:
+      driver: gelf
+      options:
+        gelf-address: "udp://localhost:12201"
+        tag: "products-service"
     networks:
       - microservices
 
@@ -94,6 +194,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    logging:
+      driver: gelf
+      options:
+        gelf-address: "udp://localhost:12201"
+        tag: "orders-service"
     networks:
       - microservices
 
@@ -111,6 +216,11 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    logging:
+      driver: gelf
+      options:
+        gelf-address: "udp://localhost:12201"
+        tag: "cart-service"
     networks:
       - microservices
 
@@ -125,6 +235,11 @@ services:
       API_URL: http://api-gateway:3000
     depends_on:
       - api-gateway
+    logging:
+      driver: gelf
+      options:
+        gelf-address: "udp://localhost:12201"
+        tag: "frontend"
     networks:
       - microservices
 

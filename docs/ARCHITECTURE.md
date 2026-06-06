@@ -2,7 +2,7 @@
 
 ## 1. System Overview
 
-ShopHub is a microservices-based e-commerce platform built on Deno. A **Fresh SSR frontend** communicates exclusively through an **API Gateway**, which routes and aggregates requests to three backend services. Persistence is split by domain: PostgreSQL for relational data (products, orders) and Redis for ephemeral cart state.
+ShopHub is a microservices-based e-commerce platform built on Deno. A **Fresh SSR frontend** communicates exclusively through an **API Gateway**, which routes and aggregates requests to backend services. Persistence is split by domain: PostgreSQL for relational data (products, orders, payments) and Redis for ephemeral cart state and pub/sub events.
 
 ```mermaid
 graph TB
@@ -22,10 +22,12 @@ graph TB
         PS["Products Service\n(port 3003)"]
         OS["Orders Service\n(port 3004)"]
         CS["Cart Service\n(port 3005)"]
+        PGW["Payment Gateway\n(port 3001)"]
+        PP["Payment Processor\n(port 3002 — internal)"]
     end
 
     subgraph Storage["Data Stores"]
-        PG[("PostgreSQL 15\nproducts · orders DBs")]
+        PG[("PostgreSQL 15\nproducts · orders\npayments · payment_processor DBs")]
         Redis[("Redis 7\ncart keys • pub/sub")]
     end
 
@@ -35,12 +37,18 @@ graph TB
     Router -->|"/api/products/*"| PS
     Router -->|"/api/orders/*"| OS
     Router -->|"/api/carts/*"| CS
+    Router -->|"/api/payments/*"| PGW
     Router -->|"aggregation\n/api/carts/:id/details"| PS & CS
+
+    PGW -->|"MockProvider"| PP
+    PGW -->|"PUT /api/orders/:id/status"| OS
 
     PS --> PG
     OS --> PG
     OS -->|"PUBLISH orders:created"| Redis
     CS -->|"SETEX cart:{userId}"| Redis
+    PGW --> PG
+    PP --> PG
 ```
 
 ---
@@ -97,6 +105,7 @@ flowchart LR
 | `GET` | `/api/carts/:userId/details` | **Aggregation**: parallel fetch from cart-service + products-service, merges product details into cart items |
 | `ALL` | `/api/carts/:path*` | Proxy → cart-service:3005 |
 | `ALL` | `/api/orders/:path*` | Proxy → orders-service:3004 |
+| `ALL` | `/api/payments/:path*` | Proxy → payment-gateway:3001 |
 
 ### 2.3 Products Service (`services/products-service/`)
 
@@ -163,6 +172,40 @@ stateDiagram-v2
 | `PUT` | `/api/carts/:userId/items/:productId` | Update quantity |
 | `DELETE` | `/api/carts/:userId/items/:productId` | Remove item |
 | `DELETE` | `/api/carts/:userId` | Clear entire cart |
+
+### 2.6 Payment Gateway (`services/payment-gateway/`)
+
+| Attribute | Value |
+|-----------|-------|
+| Runtime | Deno + Oak v12.6.1 |
+| Port | 3001 |
+| Database | PostgreSQL 15 — `payments` database |
+| Provider | Pluggable — driven by `PAYMENT_PROVIDER` env var (default `mock`) |
+
+The gateway holds a registry of `PaymentProvider` implementations. Adding a new provider (Stripe, PayPal) requires one new file implementing the `PaymentProvider` interface and one `registerProvider()` call — no changes to existing code. See [PAYMENT_SERVICES.md](PAYMENT_SERVICES.md) for full details.
+
+**API surface:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/payments/charge` | Charge card — stores Payment, updates Order status |
+| `POST` | `/api/payments/authorize` | Reserve funds without capturing |
+| `POST` | `/api/payments/:id/capture` | Capture authorised payment |
+| `POST` | `/api/payments/:id/void` | Void authorised payment |
+| `POST` | `/api/payments/:id/refund` | Refund captured payment |
+| `GET` | `/api/payments/:id` | Get payment by ID |
+| `GET` | `/api/payments` | List payments (`?orderId=` `?userId=` `?status=`) |
+
+### 2.7 Payment Processor (`services/payment-processor/`)
+
+| Attribute | Value |
+|-----------|-------|
+| Runtime | Deno + Oak v12.6.1 |
+| Port | 3002 |
+| Visibility | Internal only — not proxied through the API Gateway |
+| Database | PostgreSQL 15 — `payment_processor` database |
+
+A deterministic mock that simulates card processor behaviour. Card outcomes are driven by a lookup table in `cards.ts` (success, decline, insufficient funds, processing error). See [PAYMENT_SERVICES.md](PAYMENT_SERVICES.md) for test card numbers.
 
 ---
 
@@ -309,11 +352,26 @@ erDiagram
         int quantity
         float price
     }
+    PAYMENT {
+        string id PK
+        string orderId FK
+        string userId FK
+        float amount
+        string currency
+        string status
+        string provider
+        string providerTransactionId
+        string failureReason
+        datetime createdAt
+        datetime updatedAt
+    }
 
     USER ||--o{ CART : "has"
     USER ||--o{ ORDER : "places"
+    USER ||--o{ PAYMENT : "pays with"
     CART ||--|{ CART_ITEM : "contains"
     ORDER ||--|{ ORDER_ITEM : "contains"
+    ORDER ||--o| PAYMENT : "settled by"
     PRODUCT ||--o{ CART_ITEM : "referenced by"
     PRODUCT ||--o{ ORDER_ITEM : "referenced by"
 ```
@@ -325,6 +383,8 @@ erDiagram
 | Products | PostgreSQL 15 (`products` DB) | Persistent, seeded by `database/init.sql` |
 | Orders | PostgreSQL 15 (`orders` DB) | Persistent, with `items` column stored as JSON |
 | Cart | Redis 7 | JSON at `cart:{userId}`, 7-day sliding TTL |
+| Payments | PostgreSQL 15 (`payments` DB) | One row per charge/authorize/refund attempt |
+| Processor Transactions | PostgreSQL 15 (`payment_processor` DB) | Raw card transaction records from mock processor |
 | User session | Frontend cookie | HS256 JWT — no server-side session store |
 
 ---
@@ -336,6 +396,8 @@ graph LR
     subgraph Host["Host / Docker network"]
         FE["Frontend\n:8000"]
         GW["API Gateway\n:3000"]
+        PGW["Payment Gateway\n:3001"]
+        PP["Payment Processor\n:3002"]
         PR["Products Service\n:3003"]
         OR["Orders Service\n:3004"]
         CA["Cart Service\n:3005"]
@@ -346,11 +408,15 @@ graph LR
     Browser(["Browser"]) -->|"HTTP/HTTPS"| FE
     Browser -->|"Optional direct"| GW
     FE -->|"HTTP — API_URL"| GW
-    GW --> PR & OR & CA
+    GW --> PR & OR & CA & PGW
+    PGW --> PP
+    PGW -->|"status update"| OR
     PR --> PG
     OR --> PG
     OR -->|"PUBLISH"| RD
     CA --> RD
+    PGW --> PG
+    PP --> PG
 ```
 
 **Environment variables driving service discovery:**
@@ -359,10 +425,13 @@ graph LR
 |----------|---------|---------|
 | `API_URL` | `http://localhost:3000` | Frontend `shopApi()` |
 | `PRODUCTS_SERVICE_URL` | `http://products-service:3003` | API Gateway |
-| `ORDERS_SERVICE_URL` | `http://orders-service:3004` | API Gateway |
+| `ORDERS_SERVICE_URL` | `http://orders-service:3004` | API Gateway, Payment Gateway |
 | `CART_SERVICE_URL` | `http://cart-service:3005` | API Gateway |
-| `DATABASE_URL` | postgres connection string | Products, Orders services |
-| `REDIS_URL` | `redis://redis:6379` | Orders, Cart services |
+| `PAYMENT_GATEWAY_SERVICE_URL` | `http://payment-gateway:3001` | API Gateway |
+| `PAYMENT_PROCESSOR_URL` | `http://payment-processor:3002` | Payment Gateway |
+| `PAYMENT_PROVIDER` | `mock` | Payment Gateway — selects active provider |
+| `DB_HOST` / `DB_NAME` | `postgres` / per-service | All DB-backed services |
+| `REDIS_HOST` / `REDIS_PORT` | `redis` / `6379` | Orders, Cart, Payment Gateway |
 | `JWT_SECRET` | `shophub-dev-secret` | Frontend auth utils |
 
 ---
@@ -377,23 +446,28 @@ Every request is assigned a `X-Trace-Id` UUID at the gateway edge. The ID propag
 Browser → Gateway (assigns X-Trace-Id) → Backend Service (reads ctx.state.traceId) → Response (echoes X-Trace-Id header)
 ```
 
-`ServiceClient` automatically carries `X-Trace-Id` and `X-Source-Service` headers on all inter-service calls.
+`ServiceClient` automatically carries `X-Trace-Id` and `X-Source-Service` headers on all inter-service calls, including the Payment Gateway → Payment Processor hop.
 
 ### Structured Logging
 
-Every service emits one JSON log line per request:
+Every service emits one JSON log line per request to stdout:
 
 ```json
 {
-  "timestamp": "2026-03-24T10:00:00.000Z",
-  "service": "orders-service",
-  "traceId": "550e8400-e29b-41d4-a716-446655440000",
+  "timestamp": "2026-06-06T10:23:01.123Z",
+  "service": "payment-gateway",
+  "traceId": "a3f1c2d4-7e8b-4c2a-9f1d-b5e6a7c8d9e0",
   "method": "POST",
-  "url": "/api/orders",
+  "url": "/api/payments/charge",
   "status": 201,
-  "duration": "42ms"
+  "duration": "87ms"
 }
 ```
+
+See [OBSERVABILITY.md](OBSERVABILITY.md) for:
+- Known gaps and planned improvements (`level` field, frontend JSON normalisation, domain event logs)
+- Full ELK stack Docker Compose integration (Elasticsearch, Kibana, Logstash, Filebeat)
+- Kibana dashboard designs
 
 ### Health Checks
 
@@ -403,6 +477,14 @@ All services expose two endpoints via `BaseService`:
 |----------|---------|--------|
 | `GET /health/live` | Kubernetes liveness probe | Service is up |
 | `GET /health/ready` | Kubernetes readiness probe | Service + all dependencies (DB, Redis) |
+
+### Analytics
+
+See [ANALYTICS.md](ANALYTICS.md) for the click analytics plan:
+- Custom `analytics-service` microservice for event ingestion (funnel, conversion, product popularity)
+- `trackEvent()` frontend helper (fire-and-forget, never blocks UI)
+- Optional Matomo self-hosted product analytics overlay
+- SQL query examples for DAU, funnel conversion, payment decline rate
 
 ---
 

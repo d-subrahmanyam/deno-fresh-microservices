@@ -2,6 +2,7 @@
 import { Handlers, PageProps } from "$fresh/server.ts";
 import { SiteLayout } from "../../components/layout.tsx";
 import { getSessionUser, type SessionUser } from "../../utils/auth.ts";
+import PlausibleTracker from "../../islands/PlausibleTracker.tsx";
 import {
   fetchAllProducts,
   fetchCartItemCount,
@@ -63,6 +64,14 @@ export default function OrderConfirmationPage(props: PageProps<OrderConfirmation
   const order = props.data.order;
   return (
     <SiteLayout title="Order Confirmation" currentPath="/orders" user={props.data.user} cartCount={props.data.cartCount}>
+      <PlausibleTracker
+        event="Payment Success"
+        props={{
+          userId: props.data.user.id,
+          orderId: order.id,
+          amount: String(order.total),
+        }}
+      />
       <div class="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
         <div class="rounded-2xl bg-white p-8 shadow-md">
           <div class="rounded-xl bg-green-50 px-4 py-3 text-green-700">
