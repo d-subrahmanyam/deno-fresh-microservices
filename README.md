@@ -1,201 +1,252 @@
-# ShopHub - Online Store Microservices
+# ShopHub — Microservices Online Store
 
-A production-ready microservices-based online store application built with **Deno**, **Fresh** framework, **PostgreSQL**, and **Redis**. Features a complete e-commerce workflow with shopping carts, order management, authentication, and product browsing.
+A production-ready microservices e-commerce platform built with **Deno**, **Fresh**, **PostgreSQL**, and **Redis**. Features a complete shopping workflow — product browsing, cart management, checkout with payment processing, order tracking — plus a full observability stack (OpenTelemetry traces, ELK logs, Plausible analytics).
 
-## 🚀 Quick Start
+---
+
+## Quick Start
 
 ### Prerequisites
-- Docker & Docker Compose installed (or Deno 1.40+ for local development)
-- 4GB RAM available for containerized services
+
+- Docker & Docker Compose
+- 6 GB RAM available (8 GB recommended for the full observability stack)
 
 ### VS Code / Deno Setup
 
-This repository includes workspace settings in `.vscode/settings.json` so VS Code can use the Deno language server for the `services`, `shared`, and `frontend` folders.
+This repo includes `.vscode/settings.json` wired for the Deno language server. If VS Code shows `Cannot find name 'Deno'` errors:
 
-If VS Code shows errors such as `Cannot find name 'Deno'` or cannot resolve remote imports from `deno.land`:
+- Install the official **Deno** VS Code extension
+- Open the **repository root** folder (not a subfolder)
+- Reload the VS Code window
 
-- Install the official Deno VS Code extension
-- Reload the VS Code window after opening the workspace
-- Open the repository root folder, not an individual subfolder
-
-Once the Deno extension is active, files such as `services/api-gateway/main.ts` should resolve `Deno` globals and Oak imports correctly.
-
-### Start Application 
+### Start the Application
 
 ```bash
-# Navigate to project directory
-cd /path/to/microservices
-
-# Start all services with one command
+# Core application only (frontend + all backend services)
 docker-compose up --build
 
-# Services will be available at:
-# Frontend: http://localhost:8000
-# API Gateway: http://localhost:3000
+# With ELK logs + OpenTelemetry traces + Jaeger
+docker-compose -f docker-compose.yml -f docker-compose.elk.yml up --build
+
+# Full stack (adds Plausible analytics on top)
+docker-compose -f docker-compose.yml -f docker-compose.elk.yml -f docker-compose.plausible.yml up --build
 ```
 
-That's it! The application initializes with sample data automatically.
+The database initialises with sample products and users automatically.
 
-## 📋 Features
+---
 
-### ✅ Complete & Tested
-- **User Authentication** - JWT-based login with demo users (john@example.com, jane@example.com, bob@example.com)
-- **Product Browsing** - Full-text search, category filtering, pagination
-- **Shopping Cart** - Add/remove items, update quantities, view totals
-- **Checkout Flow** - Address validation, tax calculation, order creation
-- **Order History** - View past orders with details
-- **Order Confirmation** - Instant confirmation with generated order ID and shipping address
-- **End-to-End Testing** - Complete checkout workflow validated and working
+## Features
 
-### 🔧 Technical Features
-- **API Rate Limiting** - 1000 requests/minute per client IP
-- **Distributed Tracing (OTel)** - W3C `traceparent` propagation; full span tree visible in Jaeger; pluggable backends via OTel Collector
-- **Structured Logging (ELK)** - JSON logs shipped via GELF → Logstash → Elasticsearch, queryable in Kibana
-- **Analytics (Plausible)** - Self-hosted product analytics for page views and custom events
-- **Health Checks** - Real-time service health monitoring
-- **Error Handling** - Comprehensive error messages and HTTP status codes
-- **Database Migrations** - Automatic schema setup on container start
-- **Docker Caching** - Optimized builds with dependency layer reuse
+### Application
 
-### 🗺️ Architecture
+- **User Authentication** — JWT-based login with HttpOnly cookies; demo accounts pre-seeded
+- **Product Browsing** — full-text search, category filtering, pagination
+- **Shopping Cart** — add / remove items, update quantities, live totals
+- **Checkout & Payment** — shipping address form, card entry, real-time payment processing via mock gateway; user-friendly error cards for decline / insufficient-funds / processing errors
+- **Order Management** — create orders, track status (`pending → confirmed → shipped → delivered`), view history
+- **Order Confirmation** — instant confirmation with order ID and shipping details
+- **Analytics Dashboard** — `/analytics` page showing event funnel, conversion rate, and recent events
+
+### Technical
+
+- **Distributed Tracing (OTel)** — W3C `traceparent` propagation across all services; full parent→child span trees in Jaeger; pluggable backends via OTel Collector
+- **Structured Logging (ELK)** — JSON logs shipped via Docker GELF driver → Logstash → Elasticsearch, queryable in Kibana with pre-built saved searches
+- **Product Analytics (Plausible)** — self-hosted CE v2.1 tracking page views, login, add-to-cart, checkout, payment success/failure with user and browser metadata
+- **API Rate Limiting** — 1 000 requests/minute per client IP at the gateway
+- **Health Checks** — `/health`, `/health/live`, `/health/ready` on every service
+- **Graceful Shutdown** — 5-second drain window; OTel spans flushed before exit
+
+---
+
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      Frontend (8000)                    │
-│         Fresh SSR + Preact + Tailwind CSS               │
-│    ├─ Login & Authentication (JWT + HttpOnly Cookie)   │
-│    ├─ Product Search/Browse/Filter                     │
-│    ├─ Shopping Cart Management                         │
-│    ├─ Checkout with Address Form                       │
-│    └─ Order History & Confirmation Pages               │
-└────────────────────────┬────────────────────────────────┘
-                         │
-          ┌──────────────┴──────────────┐
-          │    API Gateway (3000)       │
-          │  Route Aggregation & Rate   │
-          │    Limiting + Tracing       │
-          └──┬──────────┬──────┬────────┘
-             │          │      │
-    ┌────────┘          │      └────────┐
-    │                   │               │
-┌───▼────┐      ┌──────▼───┐    ┌─────▼──┐
-│Products │      │  Orders  │    │ Carts  │
-│Service  │      │ Service  │    │Service │
-│ (3003)  │      │ (3004)   │    │(3005)  │
-└───┬────┘      └──────┬───┘    └────┬──┘
-    │                  │             │
-    │      PostgreSQL  │              Redis
-    └──────────────┬───┘              │
-                   │                  │
-            ┌──────┴──────────────────┘
-            │
-         (Shared Data Storage)
+┌──────────────────────────────────────────────────────────────────────┐
+│                         Frontend  :8000                              │
+│              Fresh SSR · Preact · Tailwind CSS                       │
+│   Login · Products · Cart · Checkout · Orders · Analytics Dashboard  │
+└────────────────────────────┬─────────────────────────────────────────┘
+                             │ HTTP
+                    ┌────────▼────────┐
+                    │  API Gateway    │  :3000
+                    │  Rate limiting  │
+                    │  OTel tracing   │
+                    └──┬──┬──┬──┬────┘
+                       │  │  │  │
+          ┌────────────┘  │  │  └──────────────┐
+          │               │  │                 │
+    ┌─────▼──────┐  ┌─────▼──┐  ┌─────────────▼──────┐  ┌──────────────┐
+    │  Products  │  │ Orders │  │  Payment Gateway   │  │  Analytics   │
+    │  Service   │  │Service │  │    :3001           │  │  Service     │
+    │  :3003     │  │ :3004  │  │  Provider plugin   │  │  :3006       │
+    └─────┬──────┘  └────┬───┘  └──────────┬─────────┘  └──────┬───────┘
+          │              │                  │                    │
+     PostgreSQL     PostgreSQL +       ┌────▼────────┐     PostgreSQL
+                      Redis            │  Payment    │
+                                       │  Processor  │
+                    ┌──────────────────│    :3002    │
+                    │    Cart          │  (mock)     │
+                    │   Service        └─────────────┘
+                    │   :3005
+                    │   Redis
+                    └──────────────────┐
+                                       │
+                              Shared Data Layer
+                         (PostgreSQL :5432 · Redis :6379)
+
+──────────────────── Observability ───────────────────────────────────
+
+All services ──OTLP/HTTP──► OTel Collector :4318 ──► Jaeger :16686
+All services ──GELF/UDP──►  Logstash :12201 ──► Elasticsearch :9200 ──► Kibana :5601
+Frontend     ──events──►    Plausible :8001  (ClickHouse + PostgreSQL)
 ```
 
-## � Screenshots
+---
 
-| Homepage | Products |
-|----------|----------|
-| ![Homepage](screenshots/homepage.png) | ![Products](screenshots/products.png) |
+## Services & Ports
 
-| Shopping Cart | Checkout |
-|---------------|----------|
-| ![Cart](screenshots/cart.png) | ![Checkout](screenshots/checkout.png) |
+| Service | Port | Description |
+|---|---|---|
+| **Frontend** | 8000 | Fresh SSR web app |
+| **API Gateway** | 3000 | Single ingress — rate limiting, aggregation, OTel tracing |
+| **Payment Gateway** | 3001 | Pluggable payment provider facade; persists payments to PostgreSQL |
+| **Payment Processor** | 3002 | Deterministic mock — processes test cards, persists transactions |
+| **Products Service** | 3003 | Product catalog, search, filtering |
+| **Orders Service** | 3004 | Order lifecycle, status tracking, Redis pub/sub |
+| **Cart Service** | 3005 | Cart management backed by Redis |
+| **Analytics Service** | 3006 | Event ingestion and summary API |
+| PostgreSQL | 5432 | Relational storage (one database per service) |
+| Redis | 6379 | Cart storage and pub/sub |
+| Elasticsearch | 9200 | Log index |
+| Kibana | 5601 | Log dashboards |
+| Logstash | 12201/udp | GELF log ingestion |
+| OTel Collector | 4317/4318 | OTLP gRPC / HTTP trace receiver |
+| Jaeger | 16686 | Distributed trace UI |
+| Plausible | 8001 | Product analytics UI |
 
-| Order Confirmation |
-|--------------------|
-| ![Order Confirmation](screenshots/order-confirmation.png) |
+---
 
-## �📚 Service Documentation
+## Observability UIs
 
-| Service | Port | Purpose | Documentation |
-|---------|------|---------|---------------|
-| **API Gateway** | 3000 | Single entry point for all requests, aggregation, rate limiting | [API Gateway README](services/api-gateway/README.md) |
-| **Products Service** | 3003 | Product catalog, search, filtering | [Products README](services/products-service/README.md) |
-| **Orders Service** | 3004 | Order creation, status tracking, persistence | [Orders README](services/orders-service/README.md) |
-| **Cart Service** | 3005 | Cart management with Redis backend | [Cart README](services/cart-service/README.md) |
-| **Frontend** | 8000 | User interface with Fresh SSR | Built-in routing and components |
+| UI | URL | Purpose |
+|---|---|---|
+| **Jaeger** | http://localhost:16686 | Distributed trace explorer — span trees across services |
+| **Kibana** | http://localhost:5601 | Log search and pre-built dashboards |
+| **Plausible** | http://localhost:8001 | Product analytics — page views, custom events, funnels |
 
-## 🔌 API Endpoints
+> All three start automatically with the full-stack compose command above.
 
-All endpoints are accessed through the API Gateway at `http://localhost:3000` or `http://localhost:8000/api` from the frontend.
+---
+
+## API Endpoints
+
+All routes are proxied through the API Gateway at `http://localhost:3000`.
 
 ### Authentication
 ```
-POST   /api/auth/login        - Login with credentials (returns JWT token)
-POST   /api/auth/logout       - Logout and clear session
-GET    /api/auth/me           - Get current user info
+POST  /api/auth/login       Login with email + password (sets HttpOnly session cookie)
+POST  /api/auth/logout      Clear session
+GET   /api/auth/me          Current user info
 ```
 
 ### Products
 ```
-GET    /api/products                - List all products with pagination (limit, offset)
-GET    /api/products?category=X     - Filter by category
-GET    /api/products?search=term    - Search products by name
-GET    /api/products/{id}           - Get single product details
-POST   /api/products                - Create new product (admin)
-PUT    /api/products/{id}           - Update product (admin)
-DELETE /api/products/{id}           - Delete product (admin)
+GET   /api/products                  List products (limit, offset, category, search)
+GET   /api/products/{id}             Single product
+POST  /api/products                  Create product (admin)
+PUT   /api/products/{id}             Update product (admin)
+DELETE /api/products/{id}            Delete product (admin)
 ```
 
 ### Shopping Cart
 ```
-GET    /api/carts/{userId}                   - Retrieve user's cart
-POST   /api/carts/{userId}/items             - Add item to cart
-PUT    /api/carts/{userId}/items/{productId} - Update item quantity
-DELETE /api/carts/{userId}/items/{productId} - Remove item from cart
-DELETE /api/carts/{userId}                   - Clear entire cart
+GET   /api/carts/{userId}                    Retrieve cart
+POST  /api/carts/{userId}/items              Add item
+PUT   /api/carts/{userId}/items/{productId}  Update quantity
+DELETE /api/carts/{userId}/items/{productId} Remove item
+DELETE /api/carts/{userId}                   Clear cart
 ```
 
 ### Orders
 ```
-POST   /api/orders                  - Create new order from cart
-GET    /api/orders                  - List orders (queryable by userId, status)
-GET    /api/orders/{id}             - Get order details
-PUT    /api/orders/{id}/status      - Update order status (admin)
+POST  /api/orders                    Create order
+GET   /api/orders                    List orders (?userId=, ?status=)
+GET   /api/orders/{id}               Order details
+PUT   /api/orders/{id}/status        Update status (admin)
 ```
 
-### Gateway Utilities
+### Payments
 ```
-GET    /api/carts-enriched/{userId} - Cart with product details (gateway aggregation)
-GET    /health                      - Gateway health check
+POST  /api/payments/charge           Charge card — creates payment record, updates order status
+POST  /api/payments/authorize        Authorize (hold) a payment
+POST  /api/payments/{id}/capture     Capture an authorized payment
+POST  /api/payments/{id}/void        Void an authorization
+POST  /api/payments/{id}/refund      Refund a captured payment
+GET   /api/payments/{id}             Payment details
+GET   /api/payments                  List payments (?orderId=, ?userId=, ?status=)
 ```
 
-## 🗄️ Data Models
+### Analytics
+```
+POST  /api/events                    Record a click/page event
+GET   /api/events                    List recent events (?limit=)
+GET   /api/events/summary            Aggregated stats — total events, unique users, conversion rate, funnel
+```
 
-### Product
+### Health
+```
+GET   /health                        Full health status (all dependency checks)
+GET   /health/live                   Liveness probe
+GET   /health/ready                  Readiness probe
+```
+
+---
+
+## Payment Test Cards
+
+All card numbers use expiry `12/28` and CVV `123`.
+
+| Card Number | Outcome | Error code |
+|---|---|---|
+| `4242424242424242` | Success | — |
+| `4111111111111111` | Success | — |
+| `4000000000000002` | Declined | `card_declined` |
+| `4000000000009995` | Declined | `insufficient_funds` |
+| `4000000000000119` | Error | `processing_error` |
+| Any other number | Success | — |
+
+---
+
+## Data Models
+
+### Payment
+
 ```typescript
-interface Product {
+interface Payment {
   id: string;
-  name: string;
-  description: string;
-  price: number;
-  image: string;
-  category: string;
-  stock: number;
+  orderId: string;
+  userId: string;
+  amount: number;
+  currency: string;                 // "USD"
+  status: PaymentStatus;            // pending | processing | captured | failed | refunded
+  provider: string;                 // "mock" by default
+  providerTransactionId?: string;
+  failureReason?: string;
   createdAt: Date;
   updatedAt: Date;
 }
-```
 
-### Cart & CartItem
-```typescript
-interface CartItem {
-  productId: string;
-  quantity: number;
-  price: number;
-}
-
-interface Cart {
-  id: string;
-  userId: string;
-  items: CartItem[];
-  total: number;
-  expiresAt: Date; // 7-day TTL
+interface PaymentMethod {
+  cardNumber: string;
+  cardExpiry: string;               // "MM/YY"
+  cardCvv: string;
+  cardHolder: string;
 }
 ```
 
-### Order & OrderStatus
+### Order
+
 ```typescript
 type OrderStatus = "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
 
@@ -203,580 +254,316 @@ interface Order {
   id: string;
   userId: string;
   items: OrderItem[];
-  subtotal: number;
-  shipping: number;    // $5 if subtotal < $50, else free
-  tax: number;         // 8% of subtotal
   total: number;
-  shippingAddress: {
-    street: string;
-    city: string;
-    state: string;
-    zipCode: string;
-    country: string;
-  };
   status: OrderStatus;
+  shippingAddress: string;
   createdAt: Date;
   updatedAt: Date;
 }
 ```
 
-## 📊 Sample Data
+### Cart
 
-The database initializes with sample products across multiple categories:
-
-**Sample Products:**
-- Electronics: Wireless Headphones ($79.99), USB-C Cable ($12.99)
-- Home: Coffee Maker ($49.99)
-- Sports: Running Shoes ($89.99)
-- Books: Technical guides and more
-- And 15+ additional sample products
-
-**Demo Users** (all use password: `password123`):
-- john@example.com - Standard user
-- jane@example.com - Standard user
-- bob@example.com - Standard user
-
-**Available Categories:**
-- Electronics, Home & Kitchen, Sports & Outdoors, Books, Clothing, Toys, Health & Beauty
-
-## 💾 Pricing & Expenses
-
-### Checkout Calculation Example
-```
-Order for $30 worth of items:
-- Subtotal:        $30.00
-- Shipping:        $5.00  (< $50, so fixed rate)
-- Tax (8%):        $2.40  (calculated on subtotal)
-────────────────────────
-- Total:           $37.40
-
-Order for $80 worth of items:
-- Subtotal:        $80.00
-- Shipping:        $0.00  (>= $50, so free)
-- Tax (8%):        $6.40  (calculated on subtotal)
-────────────────────────
-- Total:           $86.40
+```typescript
+interface CartItem { productId: string; quantity: number; price: number; }
+interface Cart {
+  id: string; userId: string;
+  items: CartItem[]; total: number;
+  createdAt: Date; updatedAt: Date;
+}
 ```
 
-## 📖 Deployment & Setup Guides
+---
 
-- **[Architecture](docs/ARCHITECTURE.md)** - System design, services, data model, observability, and deployment model
-- **[User & Request Flows](docs/FLOWS.md)** - End-to-end traces for every user journey (auth, browse, cart, checkout, orders) with Mermaid sequence diagrams
-- **[Quick Start Guide](docs/QUICKSTART.md)** - Get up and running in 5 minutes
-- **[Deployment Guide](docs/DEPLOYMENT.md)** - Production deployment with Kubernetes
-- **[OpenTelemetry Tracing](docs/OTEL.md)** - OTel implementation, span tree walkthrough, adding new trace backends (Datadog, Tempo, Honeycomb)
-- **[Observability & ELK](docs/OBSERVABILITY.md)** - Structured logging, GELF pipeline, Logstash config, Kibana dashboards
-- **[Plausible Analytics](docs/PLAUSIBLE.md)** - Self-hosted product analytics setup and event catalogue
-- **[Payment Services](docs/PAYMENT_SERVICES.md)** - Payment gateway + mock processor architecture and test cards
-- **[Independent Delivery Scaling Plan](docs/SCALING_PLAN.md)** - Move from all-in releases to service-level DevOps cycles
-- **[Kubernetes Target Structure](docs/KUBERNETES_TARGET_STRUCTURE.md)** - Proposed service-scoped Kubernetes layout and migration path
-- **[Local Kubernetes Guide](kubernetes/local/README.md)** - Build images locally and deploy to a local cluster
-- **[Project Summary](docs/PROJECT_SUMMARY.md)** - Complete component inventory
-- **[Service Ownership And Release Checklist](docs/SERVICE_OWNERSHIP_AND_RELEASE_CHECKLIST.md)** - Ownership matrix and per-service release template
+## Sample Data
 
-## 📡 Observability UIs
+**Demo users** (password: `password123`):
+- `john@example.com`
+- `jane@example.com`
+- `bob@example.com`
 
-| UI | URL | Purpose |
-|----|-----|---------|
-| **Jaeger** | http://localhost:16686 | Distributed trace explorer — span trees across services |
-| **Kibana** | http://localhost:5601 | Log search and dashboards |
-| **Plausible** | http://localhost:8001 | Product analytics (page views, custom events) |
+**Products** — 15+ items across: Electronics, Home & Kitchen, Sports & Outdoors, Books, Clothing, Toys, Health & Beauty
 
-> All three UIs are started automatically with the full stack command (see Quick Start).
-
-## 🔍 Database Access
-
-To inspect the database directly:
-
-```bash
-# Connect to PostgreSQL
-docker exec -it microservices-postgres-1 psql -U postgres -d products
-
-# Useful queries
-\dt                           # List all tables
-SELECT * FROM products;       # View products
-SELECT * FROM orders;         # View orders
-SELECT * FROM order_items;    # View order items
+**Pricing rules:**
+```
+Subtotal < $50  →  shipping $5.00
+Subtotal ≥ $50  →  shipping free
+Tax: 8% of subtotal
 ```
 
-Redis inspection:
-
-```bash
-# Connect to Redis
-docker exec -it microservices-redis-1 redis-cli
-
-# Useful commands
-KEYS *                        # List all keys
-GET cart:user123              # View specific cart
-EXPIRE cart:user123           # Check TTL
-```
-
-## 🧪 Testing the Application
-
-### Manual End-to-End Test
-```bash
-# 1. Open http://localhost:8000 in browser
-# 2. Click "Demo Login" and select a user
-# 3. Browse products using search/filters
-# 4. Add items to cart
-# 5. Click Checkout
-# 6. Fill shipping address and submit
-# 7. Confirm order details on order confirmation page
-# 8. Visit "Orders" to see order history
-```
-
-### Verify Services are Running
-```bash
-# All services should return healthy status
-curl http://localhost:3000/health       # API Gateway
-curl http://localhost:3003/health       # Products Service
-curl http://localhost:3004/health       # Orders Service
-curl http://localhost:3005/health       # Cart Service
-```
-
-## 🛠️ Development
-
-### Local Development (without Docker)
-
-```bash
-# Install Deno (if not already installed)
-# Then for each service:
-
-# Terminal 1: Products Service
-cd services/products-service
-deno run --allow-net --allow-env main.ts
-
-# Terminal 2: Orders Service  
-cd services/orders-service
-deno run --allow-net --allow-env main.ts
-
-# Terminal 3: Cart Service
-cd services/cart-service
-deno run --allow-net --allow-env main.ts
-
-# Terminal 4: API Gateway
-cd services/api-gateway
-deno run --allow-net --allow-env main.ts
-
-# Terminal 5: Frontend
-cd frontend
-deno task start  # or: deno run -A dev.ts
-```
-
-### Environment Variables
-
-```bash
-# API Gateway
-PORT=3000
-PRODUCTS_SERVICE_URL=http://localhost:3003
-ORDERS_SERVICE_URL=http://localhost:3004
-CART_SERVICE_URL=http://localhost:3005
-
-# Products Service
-PORT=3003
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=postgres
-DB_NAME=products
-
-# Orders Service
-PORT=3004
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=postgres
-DB_NAME=products
-REDIS_URL=redis://localhost:6379
-
-# Cart Service
-PORT=3005
-REDIS_URL=redis://localhost:6379
-```
-
-## 🐛 Known Issues & Limitations
-
-1. **Product Names in Orders** - Currently stored as "Unknown product" - will be improved with product data enrichment in orders service
-2. **Authentication** - Demo users only, no user registration flow yet
-3. **Inventory Management** - Stock quantities not decremented on purchase (planned for future release)
-
-## 🚀 Future Enhancements
-
-- Add user registration, password reset, and profile management flows
-- Implement product reviews and ratings with average score aggregation
-- Introduce wishlist support with add-to-cart shortcuts
-- Improve order item enrichment to persist product names/images at order time
-- Add inventory reservation and stock decrement on confirmed checkout
-- Add Prometheus metrics and alerting for latency, error rates, and resource usage
-- Add horizontal autoscaling policies for Kubernetes deployments
-- Evaluate service discovery evolution: stay with Kubernetes-native discovery or add Consul when scale justifies it
-- Evolve toward a headless API architecture so the same backend can power both Web and Mobile clients with shared business capabilities
-- Introduce an API experience layer (BFF or API gateway composition) for channel-specific payloads and versioning across Web and Mobile apps
-- Add GraphQL support alongside REST (initially as a hybrid model) to enable flexible client-driven queries and reduce over-fetching
-- Expand automated test coverage with contract, integration, and end-to-end suites
-
-## 📦 Technologies Used
-
-### Core Framework & Runtime
-- **Deno** 1.40+ - Modern JavaScript/TypeScript runtime
-- **Fresh** - Deno's web framework with server-side rendering
-- **Preact** - Lightweight React alternative for components
-
-### Frontend
-- **Tailwind CSS** - Utility-first CSS framework  
-- **Hero Icons** - Beautiful SVG icons
-
-### Backend
-- **Oak** - Express-like HTTP framework for Deno
-- **PostgreSQL** - Relational database for products and orders
-- **Redis** - In-memory cache and pub/sub for carts
-- **djwt** - JWT token generation and verification
-
-### DevOps & Observability
-- **Docker** - Containerization
-- **Docker Compose** - Multi-service orchestration
-- **Kubernetes** - Production-grade orchestration (optional)
-- **OpenTelemetry** - Vendor-neutral distributed tracing SDK (W3C traceparent)
-- **OTel Collector** - Pluggable trace routing (swap backends without code changes)
-- **Jaeger** - Distributed trace UI
-- **ELK Stack** - Structured log pipeline (Logstash → Elasticsearch → Kibana)
-- **Plausible CE** - Self-hosted product analytics
-
-## 📄 License
-
-This project is open source and available under the MIT License.
-
-## 🤝 Contributing
-
-Contributions are welcome. Use this workflow for consistent, reviewable changes:
-
-1. Fork the repository and create a branch from `main` using a descriptive name (example: `feat/order-retries`)
-2. Keep changes focused and atomic; avoid unrelated refactors in the same pull request
-3. Run and verify local checks before opening a PR:
-  - Start services: `docker-compose up --build`
-  - Verify health endpoints for gateway and core services
-  - Validate key user flow: login -> add to cart -> checkout -> order confirmation
-4. Add or update tests for behavioral changes (unit/integration/e2e where applicable)
-5. Update documentation when APIs, architecture, or setup steps change
-6. Open a pull request with:
-  - Summary of what changed and why
-  - Screenshots/GIFs for UI updates
-  - Notes about backward compatibility or migration steps
-7. Address review feedback with incremental commits until approval
-
-## 📞 Support & Questions
-
-For issues or questions:
-- Check existing documentation in [DEPLOYMENT.md](docs/DEPLOYMENT.md) and [QUICKSTART.md](docs/QUICKSTART.md)
-- Review individual service READMEs in `services/*/README.md`
-- Check Docker Compose logs: `docker-compose logs -f [service-name]`
-
-# Connect to products database
-\c products
-
-# View products
-SELECT * FROM products;
-```
-
-## Kubernetes Deployment (Production)
-
-### Prerequisites
-
-- Kubernetes cluster (1.24+)
-- kubectl configured
-- Docker images pushed to registry
-
-### Deploy to Kubernetes
-
-1. **Build and push images:**
-
-```bash
-docker build -t your-registry/api-gateway:latest services/api-gateway/
-docker build -t your-registry/products-service:latest services/products-service/
-docker push your-registry/api-gateway:latest
-docker push your-registry/products-service:latest
-# ... repeat for other services
-```
-
-2. **Deploy infrastructure:**
-
-```bash
-kubectl apply -f kubernetes/01-infrastructure.yaml
-```
-
-3. **Deploy services:**
-
-```bash
-kubectl apply -f kubernetes/02-services.yaml
-```
-
-4. **Enable autoscaling:**
-
-```bash
-kubectl apply -f kubernetes/03-autoscaling.yaml
-```
-
-5. **Monitor deployment:**
-
-```bash
-# Check pods
-kubectl get pods -n microservices
-
-# Watch logs
-kubectl logs -n microservices -f deployment/api-gateway
-
-# Get service endpoints
-kubectl get svc -n microservices
-```
-
-### Access Services in Kubernetes
-
-```bash
-# Port forward to API Gateway
-kubectl port-forward -n microservices svc/api-gateway 3000:80
-
-# Access: http://localhost:3000
-```
+---
 
 ## Project Structure
 
 ```
 microservices/
 ├── shared/
-│   ├── types/
-│   │   └── mod.ts              # Shared type definitions
+│   ├── types/mod.ts                # Shared types — Product, Order, Payment, ApiResponse …
 │   ├── utils/
-│   │   └── http-client.ts      # Service-to-service HTTP client
-│   └── base-service.ts         # Base service class with common features
+│   │   ├── http-client.ts          # ServiceClient — retry, timeout, OTel CLIENT spans
+│   │   └── telemetry.ts            # OTel init — provider, OTLP exporter, W3C propagator
+│   └── base-service.ts             # BaseService — OTel SERVER spans, logging, health routes
+│
 ├── services/
-│   ├── api-gateway/
-│   │   ├── main.ts             # API Gateway entry point
-│   │   └── Dockerfile
-│   ├── products-service/
-│   │   ├── main.ts             # Products Service
-│   │   └── Dockerfile
-│   ├── orders-service/
-│   │   ├── main.ts             # Orders Service
-│   │   └── Dockerfile
-│   └── cart-service/
-│       ├── main.ts             # Cart Service
-│       └── Dockerfile
+│   ├── api-gateway/                # :3000  Rate limiting, route aggregation, OTel tracing
+│   ├── payment-gateway/            # :3001  Pluggable PaymentProvider facade
+│   │   └── providers/
+│   │       ├── mod.ts              # Provider interface + registry (register / get / list)
+│   │       └── mock.ts             # MockProvider → calls payment-processor
+│   ├── payment-processor/          # :3002  Deterministic mock, test-card table
+│   ├── products-service/           # :3003  Product catalog + search
+│   ├── orders-service/             # :3004  Order lifecycle + Redis pub/sub
+│   ├── cart-service/               # :3005  Cart backed by Redis
+│   └── analytics-service/          # :3006  Event ingestion + summary API
+│
 ├── frontend/
 │   ├── routes/
-│   │   ├── index.tsx           # Home page
-│   │   ├── products.tsx        # Products page
-│   │   └── cart.tsx            # Shopping cart
-│   ├── components/             # Reusable components
-│   ├── deno.json               # Fresh project config
+│   │   ├── _app.tsx                # Layout — Plausible script injection
+│   │   ├── products.tsx            # Product browse + Login event tracking
+│   │   ├── cart.tsx                # Cart with CartRemoveButton island
+│   │   ├── checkout.tsx            # Checkout form + payment error cards
+│   │   ├── order-confirmation/     # Payment Success event tracking
+│   │   ├── analytics.tsx           # Internal analytics dashboard
+│   │   └── api/events.ts           # Proxy route → analytics-service
+│   ├── islands/
+│   │   ├── AsyncAddToCartButton.tsx
+│   │   ├── CartRemoveButton.tsx    # Fires Plausible "Remove from Cart" before submit
+│   │   ├── CheckoutSubmitTracker.tsx # Fires Plausible "Payment Submitted" before navigate
+│   │   └── PlausibleTracker.tsx    # Mount-time custom event emitter
 │   └── Dockerfile
-├── database/
-│   └── init.sql                # Database initialization
-├── kubernetes/
-│   ├── 01-infrastructure.yaml  # PostgreSQL, Redis
-│   ├── 02-services.yaml        # Microservices deployments
-│   └── 03-autoscaling.yaml     # HPA & PDB configurations
-└── docker-compose.yml          # Local development setup
+│
+├── observability/
+│   ├── logstash.conf               # GELF input → JSON parse → Elasticsearch output
+│   ├── otel-collector.yml          # OTLP receivers → batch → Jaeger exporter
+│   ├── kibana-setup.sh             # Auto-creates data view + 4 saved searches
+│   └── plausible/
+│       ├── clickhouse-config.xml
+│       └── clickhouse-ipv4.xml     # Binds ClickHouse to 0.0.0.0 (rootless Docker fix)
+│
+├── database/init.sql               # Schema for all 6 PostgreSQL databases
+├── docker-compose.yml              # Core application services
+├── docker-compose.elk.yml          # ELK + OTel Collector + Jaeger overlay
+├── docker-compose.plausible.yml    # Plausible CE overlay
+└── deno.json                       # Workspace tasks and import map
 ```
 
-## Features
-
-### ✅ Implemented
-
-- [x] Microservices architecture with Deno
-- [x] API Gateway with rate limiting and tracing
-- [x] Service-to-service communication with retry logic
-- [x] PostgreSQL database per service
-- [x] Redis for caching and message passing
-- [x] Health checks and service discovery
-- [x] Fresh SSR frontend with Tailwind CSS
-- [x] Docker & Docker Compose setup
-- [x] Kubernetes YAML for production
-- [x] HPA autoscaling configuration
-- [x] Pod Disruption Budgets
-- [x] Sample data and products
-
-### 🎯 Frontend Features
-
-- Modern responsive design with Tailwind CSS
-- Hero sections and category browsing
-- Product listing and shopping cart
-- Order status tracking
-- Clean UI with emoji product placeholders
+---
 
 ## Environment Variables
 
-### Local (docker-compose)
-```env
-PORT=3000
-DB_HOST=postgres
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=postgres
-REDIS_HOST=redis
-REDIS_PORT=6379
+### Core services (`docker-compose.yml`)
+
+| Variable | Service | Description |
+|---|---|---|
+| `PORT` | all | Listening port |
+| `DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME` | postgres-backed services | Database connection |
+| `REDIS_HOST / REDIS_PORT` | orders, cart, payment-gateway | Redis connection |
+| `PAYMENT_PROCESSOR_URL` | payment-gateway | Internal URL of payment-processor |
+| `ORDERS_SERVICE_URL` | payment-gateway | Used to update order status on charge result |
+| `PAYMENT_PROVIDER` | payment-gateway | Active provider name (default: `mock`) |
+| `API_URL` | frontend | Internal URL of api-gateway |
+| `PAYMENT_GATEWAY_SERVICE_URL` | api-gateway | Internal URL of payment-gateway |
+
+### Observability overlay (`docker-compose.elk.yml`)
+
+| Variable | Description |
+|---|---|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Collector URL, e.g. `http://otel-collector:4318` |
+| `OTEL_SERVICE_NAME` | Service label in Jaeger, e.g. `api-gateway` |
+
+### Plausible overlay (`docker-compose.plausible.yml`)
+
+| Variable | Description |
+|---|---|
+| `PLAUSIBLE_URL` | Browser-reachable Plausible URL, e.g. `http://localhost:8001` |
+| `PLAUSIBLE_DOMAIN` | Site domain registered in Plausible (e.g. `localhost`) |
+
+---
+
+## Testing the Application
+
+### Manual end-to-end flow
+
+```
+1. Open http://localhost:8000
+2. Log in with john@example.com / password123
+3. Browse products — search or filter by category
+4. Add items to cart
+5. Go to Cart → click Checkout
+6. Fill shipping address
+7. Enter card number 4242424242424242, expiry 12/28, CVV 123
+8. Click "Place Order & Pay"
+9. Confirm the order confirmation page shows your order ID
+10. Visit /orders to see order history
 ```
 
-### Production (Kubernetes)
-Located in `kubernetes/01-infrastructure.yaml`
+Try a declined payment by using card `4000000000000002` — the checkout page shows a user-friendly error card instead of a raw error code.
 
-## Health Checks
+### Verify all services are healthy
 
-All services expose health endpoints:
-
+```bash
+curl http://localhost:3000/health   # API Gateway
+curl http://localhost:3001/health   # Payment Gateway
+curl http://localhost:3002/health   # Payment Processor
+curl http://localhost:3003/health   # Products Service
+curl http://localhost:3004/health   # Orders Service
+curl http://localhost:3005/health   # Cart Service
+curl http://localhost:3006/health   # Analytics Service
 ```
-GET /health           - Full health status
-GET /health/live      - Liveness probe
-GET /health/ready     - Readiness probe
-```
 
-Example response:
+### Health response format
+
 ```json
 {
   "status": "healthy",
-  "service": "products-service",
+  "service": "payment-gateway",
   "version": "1.0.0",
-  "uptime": 1234,
+  "uptime": 42,
   "checks": {
-    "database": {
-      "status": "healthy",
-      "latency": 12
-    }
+    "database": { "status": "healthy", "latency": 3 },
+    "redis":    { "status": "healthy", "latency": 1 }
   }
 }
 ```
 
-## Development
+---
 
-### Run Services Locally
+## Database Access
 
-1. **Products Service:**
 ```bash
-deno run --allow-net --allow-env services/products-service/main.ts
+# PostgreSQL — connect to any database
+docker exec -it microservices-postgres-1 psql -U postgres -d payments
+
+# Useful databases: products, orders, analytics, payments, payment_processor
+\dt                        # list tables
+SELECT * FROM payments;    # view payment records
+SELECT * FROM orders;      # view orders
+
+# Redis — inspect cart data
+docker exec -it microservices-redis-1 redis-cli
+KEYS *
+GET cart:user-id-here
 ```
 
-2. **Orders Service:**
+---
+
+## Local Development (without Docker)
+
+Each service runs independently. You need PostgreSQL and Redis running locally.
+
 ```bash
-deno run --allow-net --allow-env services/orders-service/main.ts
+# Products Service
+deno run --allow-net --allow-env --allow-read services/products-service/main.ts
+
+# Orders Service
+deno run --allow-net --allow-env --allow-read services/orders-service/main.ts
+
+# Cart Service
+deno run --allow-net --allow-env --allow-read services/cart-service/main.ts
+
+# Payment Processor
+deno run --allow-net --allow-env --allow-read services/payment-processor/main.ts
+
+# Payment Gateway
+deno run --allow-net --allow-env --allow-read services/payment-gateway/main.ts
+
+# Analytics Service
+deno run --allow-net --allow-env --allow-read services/analytics-service/main.ts
+
+# API Gateway
+deno run --allow-net --allow-env --allow-read services/api-gateway/main.ts
+
+# Frontend
+cd frontend && deno task start
 ```
 
-3. **Cart Service:**
-```bash
-deno run --allow-net --allow-env services/cart-service/main.ts
-```
+---
 
-4. **API Gateway:**
-```bash
-deno run --allow-net --allow-env services/api-gateway/main.ts
-```
+## Deployment Guides
 
-5. **Frontend:**
-```bash
-cd frontend
-deno run -A --watch=static/,routes/ dev.ts
-```
+| Document | Description |
+|---|---|
+| [Quick Start](docs/QUICKSTART.md) | Get running in 5 minutes |
+| [Architecture](docs/ARCHITECTURE.md) | System design, data model, service contracts |
+| [User & Request Flows](docs/FLOWS.md) | Mermaid sequence diagrams for every user journey |
+| [OpenTelemetry Tracing](docs/OTEL.md) | OTel implementation, span tree walkthrough, plugging in new backends |
+| [Observability & ELK](docs/OBSERVABILITY.md) | GELF pipeline, Logstash config, Kibana dashboards |
+| [Payment Services](docs/PAYMENT_SERVICES.md) | Gateway + processor architecture, provider plugin pattern |
+| [Plausible Analytics](docs/PLAUSIBLE.md) | Self-hosted analytics setup and event catalogue |
+| [Analytics Dashboard](docs/ANALYTICS.md) | Internal `/analytics` route and event schema |
+| [Deployment Guide](docs/DEPLOYMENT.md) | Production Kubernetes deployment |
+| [Scaling Plan](docs/SCALING_PLAN.md) | Moving to per-service release cycles |
+| [Kubernetes Target Structure](docs/KUBERNETES_TARGET_STRUCTURE.md) | Proposed K8s layout and migration path |
+| [Local Kubernetes](kubernetes/local/README.md) | Build and deploy to a local cluster |
+| [Project Summary](docs/PROJECT_SUMMARY.md) | Full component inventory |
+| [Service Ownership & Release Checklist](docs/SERVICE_OWNERSHIP_AND_RELEASE_CHECKLIST.md) | Ownership matrix and release template |
 
-### Database Initialization
+---
 
-Run migrations manually:
-```bash
-psql -U postgres -f database/init.sql
-```
+## Technologies
 
-## Performance Considerations
+| Category | Technology |
+|---|---|
+| Runtime | Deno 1.40+ |
+| Frontend framework | Fresh 1.6 + Preact |
+| HTTP framework | Oak v12 |
+| Styling | Tailwind CSS |
+| Database | PostgreSQL 15 (one DB per service) |
+| Cache / pub-sub | Redis 7 |
+| Auth | djwt (JWT) |
+| Tracing SDK | OpenTelemetry (`sdk-trace-base`, `context-async-hooks`) |
+| Trace collector | OTel Collector contrib 0.96 |
+| Trace UI | Jaeger all-in-one 1.54 |
+| Log pipeline | Logstash 8.11 (GELF input → Elasticsearch output) |
+| Log storage | Elasticsearch 8.11 |
+| Log UI | Kibana 8.11 |
+| Product analytics | Plausible CE v2.1 (ClickHouse 24.3 + PostgreSQL 16) |
+| Containerisation | Docker + Docker Compose |
+| Orchestration | Kubernetes (optional, YAMLs in `kubernetes/`) |
 
-- **Rate Limiting**: 1000 requests/minute per IP
-- **Connection Pooling**: Optimized for database connections
-- **Caching**: Redis for cart data with 7-day TTL
-- **HPA**: Scales from 2-10 replicas based on CPU/Memory
-- **Graceful Shutdown**: 5-second window for in-flight requests
-
-## Security
-
-- ✅ Permission-based execution (Deno's security model)
-- ✅ Environment variable isolation
-- ✅ Network policies in Kubernetes
-- ✅ Service-to-service tracing
-- ✅ Health checks for malfunction detection
-
-## Scaling Strategy
-
-### Horizontal Scaling
-- API Gateway: 3-10 replicas (high traffic)
-- Products Service: 2-8 replicas
-- Orders Service: 2-8 replicas
-- Cart Service: 2-8 replicas
-
-### Vertical Scaling
-- Increase resource requests/limits in Kubernetes
-- Adjust database connection pool size
-
-## Monitoring & Observability
-
-Structured JSON logging from all services includes:
-- Timestamp
-- Service name
-- Trace ID (for correlation)
-- HTTP method & path
-- Response status
-- Duration
+---
 
 ## Troubleshooting
 
-### Services won't connect
+**Services won't start**
 ```bash
-# Check if containers are running
-docker ps
-
-# Check logs
-docker logs microservices-api-gateway-1
+docker-compose logs -f api-gateway
+docker-compose logs -f payment-gateway
 ```
 
-### Database connection errors
+**OTel spans not appearing in Jaeger**
 ```bash
-# Check PostgreSQL
-docker logs microservices-postgres-1
-
-# Verify connection
-docker exec microservices-postgres-1 psql -U postgres -c "SELECT 1"
+# Check collector is receiving spans
+curl http://localhost:8888/metrics | grep accepted_spans
+# Check Jaeger is reachable
+curl http://localhost:16686/api/services
 ```
 
-### High memory usage
-```bash
-# Check which service
-docker stats
+**Plausible shows "Awaiting first pageview"**
+Ensure you're running with the Plausible overlay and using `script.local.js` (automatically selected when `PLAUSIBLE_DOMAIN=localhost`). The standard `script.js` silently drops all localhost traffic.
 
-# Increase container limits in docker-compose.yml
+**Payment always returns processing_error**
+Use one of the test cards in the table above. Any unlisted 16-digit number defaults to success.
+
+**High memory usage**
+```bash
+docker stats   # identify the culprit
+# ELK stack uses ~1.5 GB; Plausible (ClickHouse) uses ~1 GB
+# Reduce Elasticsearch heap: ES_JAVA_OPTS=-Xms256m -Xmx256m in docker-compose.elk.yml
 ```
 
-## Technology Stack
+---
 
-| Component | Technology |
-|-----------|-----------|
-| Runtime | Deno 1.40+  |
-| Web Server | Oak v12  |
-| Frontend | Fresh + Preact |
-| Styling | Tailwind CSS |
-| Database | PostgreSQL 15 |
-| Caching | Redis 7 |
-| Containerization | Docker |
-| Orchestration | Kubernetes |
-| Icons | Hero Icons |
+## Contributing
+
+1. Fork and create a branch from `main`: `feat/your-feature`
+2. Run the full stack locally and validate the happy path (login → add to cart → checkout with `4242…` → order confirmation)
+3. Check Jaeger that your changes produce correct span trees
+4. Update docs when APIs, environment variables, or architecture change
+5. Open a PR with a summary of what changed and why
+
+---
 
 ## License
 
-MIT - Open source and free to use
-
-## Community
-
-Feel free to submit issues, enhancement requests, and pull requests.
-
-## Support
-
-- Deno documentation: https://docs.deno.com
-- Oak documentation: https://oak.deno.dev
-- Fresh documentation: https://fresh.deno.dev
-- Kubernetes documentation: https://kubernetes.io/docs
-
-## Author
-
-Built with ❤️ for the microservices community
+MIT — open source and free to use.
