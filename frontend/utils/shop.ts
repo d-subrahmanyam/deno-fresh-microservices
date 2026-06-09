@@ -135,6 +135,9 @@ export function toNumber(value: unknown) {
 }
 
 export function resolveProductImage(image: string | null | undefined, productName: string) {
+  // Full URLs from the storage service, S3, or Azure — use directly without mapping
+  if (image && /^https?:\/\//.test(image)) return image;
+
   const normalizedImage = (image || `${slugify(productName)}.svg`).toLowerCase();
   const svgCandidate = normalizedImage.replace(/\.(jpg|jpeg|png|webp)$/i, ".svg");
 

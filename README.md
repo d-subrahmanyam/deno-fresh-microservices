@@ -47,6 +47,7 @@ The database initialises with sample products and users automatically.
 - **Order Management** — create orders, track status (`pending → confirmed → shipped → delivered`), view history
 - **Order Confirmation** — instant confirmation with order ID and shipping details
 - **Admin Panel** — role-gated `/admin` area: KPI dashboard, product CRUD (create / edit / delete), order status management, analytics dashboard
+- **Image Storage** — self-hosted mock S3 (`storage-service`) with file upload from the admin product form; adapter pattern makes switching to AWS S3 or Azure Blob a single env-var change
 
 ### Technical
 
@@ -116,6 +117,7 @@ Frontend     ──events──►    Plausible :8001  (ClickHouse + PostgreSQL)
 | **Orders Service** | 3004 | Order lifecycle, status tracking, Redis pub/sub |
 | **Cart Service** | 3005 | Cart management backed by Redis |
 | **Analytics Service** | 3006 | Event ingestion and summary API |
+| **Storage Service** | 3007 | Mock S3 object storage — file upload, serve, delete; local / S3 / Azure adapter |
 | PostgreSQL | 5432 | Relational storage (one database per service) |
 | Redis | 6379 | Cart storage and pub/sub |
 | Elasticsearch | 9200 | Log index |
@@ -385,6 +387,12 @@ microservices/
 | `PAYMENT_PROVIDER` | payment-gateway | Active provider name (default: `mock`) |
 | `API_URL` | frontend | Internal URL of api-gateway |
 | `PAYMENT_GATEWAY_SERVICE_URL` | api-gateway | Internal URL of payment-gateway |
+| `STORAGE_PROVIDER` | storage-service | Active provider: `local` (default), `s3`, or `azure` |
+| `STORAGE_PUBLIC_URL` | storage-service | Base URL used to construct file URLs; set to S3/Azure URL in production |
+| `STORAGE_PATH` | storage-service | Filesystem path for uploaded files (local provider only) |
+| `MAX_FILE_SIZE_MB` | storage-service | Upload size limit in MB (default: `5`) |
+| `STORAGE_API_KEY` | storage-service + frontend | Shared secret for service-to-service write auth (`X-Storage-Key` header); must match on both sides |
+| `STORAGE_SERVICE_URL` | frontend | Internal URL the Fresh upload proxy uses to reach the storage service |
 
 ### Observability overlay (`docker-compose.elk.yml`)
 
@@ -528,6 +536,7 @@ cd frontend && deno task start
 | [Payment Services](docs/PAYMENT_SERVICES.md) | Gateway + processor architecture, provider plugin pattern |
 | [Plausible Analytics](docs/PLAUSIBLE.md) | Self-hosted analytics setup and event catalogue |
 | [Analytics Dashboard](docs/ANALYTICS.md) | Internal `/analytics` route and event schema |
+| [Storage Service](docs/STORAGE_SERVICE.md) | Mock S3 storage, provider adapter pattern, S3/Azure activation steps |
 | [Deployment Guide](docs/DEPLOYMENT.md) | Production Kubernetes deployment |
 | [Scaling Plan](docs/SCALING_PLAN.md) | Moving to per-service release cycles |
 | [Kubernetes Target Structure](docs/KUBERNETES_TARGET_STRUCTURE.md) | Proposed K8s layout and migration path |
