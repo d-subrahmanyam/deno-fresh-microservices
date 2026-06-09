@@ -3,6 +3,7 @@ import { Handlers, PageProps } from "$fresh/server.ts";
 import { AdminLayout } from "../../../components/admin-layout.tsx";
 import { AlertBanner } from "../../../components/alert-banner.tsx";
 import { FormField } from "../../../components/form-field.tsx";
+import ImageUpload from "../../../islands/ImageUpload.tsx";
 import { getSessionUser, type SessionUser } from "../../../utils/auth.ts";
 import { normalizeProduct, shopApi, type Product } from "../../../utils/shop.ts";
 
@@ -136,7 +137,7 @@ export default function EditProductPage(props: PageProps<EditProductData>) {
             <FormField label="Category" name="category" value={values.category} error={errors.category} required />
             <FormField label="Price ($)" name="price" type="number" value={values.price} error={errors.price} required />
             <FormField label="Stock" name="stock" type="number" value={values.stock} error={errors.stock} />
-            <FormField label="Image URL" name="image" value={values.image} error={errors.image} colSpan />
+            <ImageUpload name="image" currentUrl={values.image} colSpan />
             <FormField
               label="Description"
               name="description"

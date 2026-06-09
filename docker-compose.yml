@@ -224,6 +224,32 @@ services:
     networks:
       - microservices
 
+  # Storage Service — local mock S3 for dev; swap STORAGE_PROVIDER for S3/Azure in higher envs.
+  # Port 3007 is NOT exposed on the host: all browser traffic is proxied through the
+  # Fresh frontend (/api/upload for writes, /api/storage/files/:key for reads).
+  # STORAGE_API_KEY guards write endpoints against other containers on the Docker network.
+  storage-service:
+    build:
+      context: .
+      dockerfile: ./services/storage-service/Dockerfile
+    environment:
+      PORT: "3007"
+      STORAGE_PROVIDER: local
+      STORAGE_PUBLIC_URL: http://localhost:8000/api/storage
+      STORAGE_PATH: /app/uploads
+      MAX_FILE_SIZE_MB: "5"
+      ALLOWED_TYPES: "image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
+      STORAGE_API_KEY: "shophub-storage-dev-key"
+    volumes:
+      - storage_data:/app/uploads
+    logging:
+      driver: gelf
+      options:
+        gelf-address: "udp://localhost:12201"
+        tag: "storage-service"
+    networks:
+      - microservices
+
   # Fresh Frontend
   frontend:
     build:
@@ -233,8 +259,11 @@ services:
       - "8000:8000"
     environment:
       API_URL: http://api-gateway:3000
+      STORAGE_SERVICE_URL: http://storage-service:3007
+      STORAGE_API_KEY: "shophub-storage-dev-key"
     depends_on:
       - api-gateway
+      - storage-service
     logging:
       driver: gelf
       options:
@@ -245,6 +274,7 @@ services:
 
 volumes:
   postgres_data:
+  storage_data:
 
 networks:
   microservices:
